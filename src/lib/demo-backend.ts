@@ -262,9 +262,9 @@ async function handle(pathname: string, method: string, request: Request): Promi
 
 function banner() {
   const style = document.createElement("style");
-  style.textContent = `.preview-banner{position:fixed;z-index:200;left:24px;bottom:24px;display:flex;align-items:center;gap:8px;padding:9px 15px;border-radius:999px;font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:rgba(16,23,40,.72);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 12px 34px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.28);pointer-events:none}
+  style.textContent = `.preview-banner{position:fixed;z-index:200;left:50%;bottom:22px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:9px 15px;border-radius:999px;font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:rgba(16,23,40,.72);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 12px 34px -12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.28);pointer-events:none}
 .preview-banner i{width:7px;height:7px;border-radius:50%;background:#f2a20c;box-shadow:0 0 0 3px rgba(242,162,12,.28)}
-@media (max-width:850px){.preview-banner{left:14px;right:14px;justify-content:center;bottom:calc(max(12px, env(safe-area-inset-bottom)) + 82px);font-size:11px}
+@media (max-width:850px){.preview-banner{left:14px;right:14px;transform:none;justify-content:center;bottom:calc(max(12px, env(safe-area-inset-bottom)) + 82px);font-size:11px}
 .app-shell .toast{bottom:calc(max(12px, env(safe-area-inset-bottom)) + 130px)}
 .workflow-shell .toast{bottom:calc(max(12px, env(safe-area-inset-bottom)) + 62px)}
 }`;
