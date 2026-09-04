@@ -25,6 +25,18 @@ There is no extension and no survey tab to open. After confirming the receipt an
 
 The server launches an isolated Chromium window off-screen, enters the confirmed 12-digit receipt code, purchase amount, and answers, advances at a human-scale rate, and submits only after every required field is filled. It never takes over the user's browser, guesses an unknown required answer, or bypasses CAPTCHAs/security checks. Jobs are serialized and persisted in SQLite; interrupted jobs are marked failed instead of remaining stuck.
 
+## Interface preview
+
+`npm run build:preview` produces a static build of the client with
+`VITE_PREVIEW_DEMO=1`. That flag — set nowhere else — loads
+`src/lib/demo-backend.ts`, which answers the `/api` calls from memory so the
+interface can be explored on static hosting without the local server, SQLite,
+Claude, or the Playwright worker. The preview labels itself in the UI.
+
+`npm run dev`, `npm run build`, and `npm start` never set the flag, and the
+demo module is tree-shaken out of those bundles, so the real app still refuses
+to substitute receipt details it did not read.
+
 ## Data and privacy
 
 SQLite and uploaded images live under `.data/`, which is excluded from Git. Files use randomized names and are served only through receipt-scoped API routes. Delete a receipt from its detail view or clear local data by removing the specific `.data` folder while the app is stopped.
