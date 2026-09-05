@@ -1,5 +1,5 @@
 import { ArrowUpRight, Clock3, HelpCircle, History, Home, LockKeyhole, Settings, ShieldCheck, UserRound } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { BrandMark, IconWell } from "./IconWell";
 
 export type AppView = "home" | "quality" | "confirm" | "queue" | "settings";
@@ -15,6 +15,8 @@ interface Props {
 export function AppShell({ view, queueCount, historyOnly = false, onNavigate, children }: Props) {
   const inWorkflow = view === "quality" || view === "confirm";
   const pageName = view === "queue" ? historyOnly ? "History" : "Queue" : view === "settings" ? "Settings" : "Home";
+  const activeIndex = view === "home" || inWorkflow ? 0 : view === "queue" && !historyOnly ? 1 : view === "queue" && historyOnly ? 2 : -1;
+  const { navRef, indicatorStyle } = useNavIndicator(activeIndex);
   return (
     <div className={`app-shell ${inWorkflow ? "workflow-shell" : ""}`}>
       <a className="skip-link" href="#main-content">Skip to content</a>
@@ -23,10 +25,11 @@ export function AppShell({ view, queueCount, historyOnly = false, onNavigate, ch
           <BrandMark />
           <span>Receipt Relay</span>
         </button>
-        <nav>
+        <nav ref={navRef}>
           <NavButton icon={<Home />} label="Home" active={view === "home" || inWorkflow} onClick={() => onNavigate("home")} />
           <NavButton icon={<Clock3 />} label="Queue" active={view === "queue" && !historyOnly} count={queueCount} onClick={() => onNavigate("queue")} />
           <NavButton icon={<History />} label="History" active={view === "queue" && historyOnly} onClick={() => onNavigate("queue", true)} />
+          {indicatorStyle ? <span className="nav-indicator" style={indicatorStyle} aria-hidden="true" /> : null}
         </nav>
         <nav className="sidebar-bottom">
           <NavButton icon={<Settings />} label="Settings" active={view === "settings"} onClick={() => onNavigate("settings")} />
@@ -50,6 +53,24 @@ export function AppShell({ view, queueCount, historyOnly = false, onNavigate, ch
       </nav> : null}
     </div>
   );
+}
+
+function useNavIndicator(activeIndex: number) {
+  const navRef = useRef<HTMLElement>(null);
+  const [indicatorStyle, setIndicatorStyle] = useState<{ transform: string; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const nav = navRef.current;
+      const active = activeIndex >= 0 ? (nav?.children[activeIndex] as HTMLElement | undefined) : undefined;
+      setIndicatorStyle(active ? { transform: `translateY(${active.offsetTop}px)`, height: active.offsetHeight } : null);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [activeIndex]);
+
+  return { navRef, indicatorStyle };
 }
 
 function NavButton({ icon, label, active, count, onClick }: { icon: ReactNode; label: string; active: boolean; count?: number; onClick: () => void }) {
