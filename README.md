@@ -56,7 +56,9 @@ npm run survey:dry-run -- --code MKYW-ZM3N-L9VG --total 13.27
 
 Opens a visible Chrome window you can watch, walks the live survey, screenshots every page into `.context/survey-dry-run/`, prints the question-by-question structure, and stops at the submit button. Add `--submit` only when you actually intend to submit.
 
-Note that the survey host serves nothing at all to a headless browser and rate-limits rapid repeat sessions, so runs are headed and deliberately paced.
+Note that the survey host serves nothing at all to a headless browser and rate-limits repeat automated sessions, so runs are headed, deliberately paced, and give up after three consecutive rejections rather than retrying into the block.
+
+`tests/survey-replica.test.ts` rebuilds the live survey's page shapes — the SMG consent gate, the split code and amount entry, the satisfaction grids, and the thank-you page — locally. It verifies completion detection, the proof screenshot, and the practice-run stop end to end without putting any load on the real host.
 
 ## Interface preview
 

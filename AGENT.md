@@ -29,5 +29,6 @@ Receipt Relay is a local-first, mobile-first receipt intelligence application.
 - `server/ai/catalog.ts`, `factory.ts`, `contract.ts`: provider list, credential-to-provider resolution, and the one receipt/feedback schema every provider answers.
 - `server/settings.ts`: encrypted local settings, including the model credential.
 - `server/survey/automation.ts`: private Playwright worker, matrix-aware field mapper, screenshot proof, and practice runs.
-- `tests/`: unit, integration, and browser tests. `tests/live/` holds the supervised run against the real survey.
+- `tests/`: unit, integration, and browser tests. `tests/survey-replica.test.ts` rebuilds the live survey's page shapes locally; `tests/live/` holds the supervised run against the real one.
+- Never work around the survey host's rate limiting by changing address or identity. Slow down, back off, and report instead.
 - `.data/`: runtime database and private uploads (gitignored).

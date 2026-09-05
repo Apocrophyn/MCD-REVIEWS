@@ -333,7 +333,7 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
     const first = row?.querySelector("th, td");
     return first && !first.contains(element) ? normalize(first.textContent) : "";
   };
-  const columnHeader = (element: Element) => {
+  const columnHeaderText = (element: Element) => {
     const cell = cellOf(element);
     const row = cell?.closest("tr");
     const table = row?.closest("table");
@@ -344,11 +344,12 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
       if (headerRow === row || !headerRow.querySelector("th")) continue;
       const cells = [...headerRow.children];
       if (cells.length !== row.children.length) continue;
-      const text = normalize(cells[index]?.textContent);
-      if (text) return text;
+      const text = cells[index]?.textContent?.trim() ?? "";
+      if (normalize(text)) return text;
     }
     return "";
   };
+  const columnHeader = (element: Element) => normalize(columnHeaderText(element));
   const tableHeading = (element: Element) => {
     const table = element.closest("table");
     if (!table) return "";
@@ -361,7 +362,9 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
 
   const questionText = (element: Element) => {
     const row = rowLabel(element);
-    if (row) return normalize(`${tableHeading(element)} ${row}`);
+    // A single-row grid can leave the row label blank and carry the question in
+    // the table heading instead, so fall back to it rather than reading nothing.
+    if (row || element.closest("table")) return normalize(`${tableHeading(element)} ${row}`);
     const group = groupFor(element);
     const heading = group?.querySelector("legend, h1, h2, h3, h4, [class*='prompt' i], [class*='questiontext' i], [class*='question-text' i]");
     return normalize(`${heading?.textContent ?? ""} ${group?.textContent ?? ""}`.slice(0, 1_500));
@@ -582,12 +585,15 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
       ? shorten(`${tableHeading(radios[0])} — ${row}`)
       : shorten(groupFor(radios[0])?.querySelector("legend, h1, h2, h3, h4")?.textContent ?? radios[0].name ?? "");
     const checked = radios.find((radio) => radio.checked);
+    // In a grid the raw value is a bare "5"; the column header says what that
+    // actually means, which is what belongs in the record shown to the user.
+    const choiceLabel = (radio: HTMLInputElement) => shorten(columnHeaderText(radio) || labelText(radio));
     questions.push({
       prompt: prompt || "(unlabelled choice)",
       kind: "radio",
-      options: radios.map((radio) => shorten(labelText(radio))).slice(0, 12),
+      options: radios.map(choiceLabel).slice(0, 12),
       answered: Boolean(checked),
-      answer: checked ? shorten(labelText(checked)) : "",
+      answer: checked ? choiceLabel(checked) : "",
       required: true,
     });
   });

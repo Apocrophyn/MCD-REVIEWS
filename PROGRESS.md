@@ -265,6 +265,9 @@ Current Phase: Phase 1 — Release Validation
 * [x] Page-by-page transcript of questions asked and answers given
 * [x] Practice run that fills every page and stops at the submit button
 * [x] Supervised live run script (`npm run survey:dry-run`)
+* [x] Local replica of the live survey flow, exercising completion detection,
+      the proof screenshot, and the practice-run stop without loading the
+      third-party host
 * [x] Optional visible browser toggle in Settings
 
 ---
@@ -277,7 +280,7 @@ None.
 
 ## Next
 
-1. Perform a live *submitting* survey run with an eligible receipt and confirm the thank-you screenshot.
+1. Perform a live *submitting* survey run with an eligible receipt and confirm the thank-you screenshot. Completion and proof capture are verified against the replica; only the live host round trip is outstanding.
 2. Complete physical-device sign-off in iPhone Safari.
 3. Choose a deployment target if access beyond the local machine is required.
 
