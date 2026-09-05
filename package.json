@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build",
-    "build:preview": "VITE_PREVIEW_DEMO=1 npm run build"
+    "build:preview": "VITE_PREVIEW_DEMO=1 npm run build",
+    "survey:dry-run": "tsx tests/live/food-for-thoughts-dry-run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",

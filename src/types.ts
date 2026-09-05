@@ -43,6 +43,27 @@ export interface Experience {
 
 export type AutomationJobStatus = "queued" | "running" | "needs_attention" | "completed" | "failed";
 
+export interface SurveyQuestionSummary {
+  prompt: string;
+  kind: "text" | "radio" | "checkbox" | "select" | "textarea";
+  options: string[];
+  answered: boolean;
+  answer: string;
+  required: boolean;
+}
+
+export interface SurveyPageSummary {
+  index: number;
+  url: string;
+  heading: string;
+  filled: number;
+  unansweredRequired: number;
+  action: string | null;
+  actionKind: "next" | "submit" | null;
+  screenshot: string | null;
+  questions: SurveyQuestionSummary[];
+}
+
 export interface AutomationJob {
   id: string;
   receiptId: string;
@@ -53,6 +74,9 @@ export interface AutomationJob {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  dryRun: boolean;
+  proof: string | null;
+  transcript: SurveyPageSummary[];
 }
 
 export interface ReceiptClassification {
@@ -104,9 +128,43 @@ export interface SurveyPreparation {
 export interface Health {
   ok: boolean;
   aiProvider: string;
+  aiModel: string;
+  aiSource: "settings" | "environment" | "none";
   analysisEnabled: boolean;
+  feedbackEnabled: boolean;
+  visionSupported: boolean;
   surveyAutomator: string;
   automationEnabled: boolean;
+  showBrowser: boolean;
   maxUploadMb: number;
   maxImages: number;
+}
+
+export interface ProviderOption {
+  id: string;
+  label: string;
+  credentialLabel: string;
+  credentialHint: string;
+  defaultModel: string;
+  visionModels: string[];
+  supportsVision: boolean;
+  editableBaseUrl: boolean;
+  notes: string;
+  docsUrl: string;
+  baseUrl: string;
+}
+
+export interface ProviderSettings {
+  providers: ProviderOption[];
+  credential: { providerId: string; model: string; baseUrl: string; maskedToken: string; updatedAt: string } | null;
+  active: { name: string; model: string; source: "settings" | "environment" | "none"; supportsVision: boolean };
+  environmentKeyPresent: boolean;
+}
+
+export interface CredentialVerification {
+  ok: true;
+  provider: string;
+  model: string;
+  supportsVision: boolean;
+  warning: string | null;
 }

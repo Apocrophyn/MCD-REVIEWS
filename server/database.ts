@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import type { AutomationJob, AutomationJobStatus, Employee, Experience, QualityAssessment, Receipt, ReceiptClassification, ReceiptImage, ReceiptStatus } from "./domain/schemas.js";
+import type { AutomationJob, AutomationJobStatus, Employee, Experience, QualityAssessment, Receipt, ReceiptClassification, ReceiptImage, ReceiptStatus, SurveyPageSummary } from "./domain/schemas.js";
 import { assertTransition } from "./domain/state-machine.js";
 
 interface ReceiptRow {
@@ -54,6 +54,9 @@ interface AutomationJobRow {
   updated_at: string;
   started_at: string | null;
   completed_at: string | null;
+  dry_run: number;
+  proof_file: string | null;
+  transcript_json: string | null;
 }
 
 export class DuplicateReceiptError extends Error {
@@ -127,7 +130,10 @@ export class ReceiptRepository {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         started_at TEXT,
-        completed_at TEXT
+        completed_at TEXT,
+        dry_run INTEGER NOT NULL DEFAULT 0,
+        proof_file TEXT,
+        transcript_json TEXT
       );
       CREATE INDEX IF NOT EXISTS automation_jobs_receipt_idx ON automation_jobs(receipt_id, created_at DESC);
       INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (1, datetime('now'));
@@ -138,6 +144,13 @@ export class ReceiptRepository {
     if (!columns.some((column) => column.name === "classification_json")) {
       this.db.exec("ALTER TABLE receipts ADD COLUMN classification_json TEXT");
     }
+    const jobColumns = this.db.prepare("PRAGMA table_info(automation_jobs)").all() as Array<{ name: string }>;
+    const addJobColumn = (name: string, definition: string) => {
+      if (!jobColumns.some((column) => column.name === name)) this.db.exec(`ALTER TABLE automation_jobs ADD COLUMN ${name} ${definition}`);
+    };
+    addJobColumn("dry_run", "INTEGER NOT NULL DEFAULT 0");
+    addJobColumn("proof_file", "TEXT");
+    addJobColumn("transcript_json", "TEXT");
   }
 
   close() {
@@ -276,11 +289,11 @@ export class ReceiptRepository {
     `).run(now, now);
   }
 
-  createAutomationJob(job: Pick<AutomationJob, "id" | "receiptId" | "status" | "progress" | "message" | "createdAt" | "updatedAt">) {
+  createAutomationJob(job: Pick<AutomationJob, "id" | "receiptId" | "status" | "progress" | "message" | "createdAt" | "updatedAt" | "dryRun">) {
     this.db.prepare(`
-      INSERT INTO automation_jobs (id, receipt_id, status, progress, message, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(job.id, job.receiptId, job.status, job.progress, job.message, job.createdAt, job.updatedAt);
+      INSERT INTO automation_jobs (id, receipt_id, status, progress, message, created_at, updated_at, dry_run)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(job.id, job.receiptId, job.status, job.progress, job.message, job.createdAt, job.updatedAt, job.dryRun ? 1 : 0);
     return this.getAutomationJob(job.id)!;
   }
 
@@ -299,12 +312,12 @@ export class ReceiptRepository {
     return row ? this.hydrateAutomationJob(row) : null;
   }
 
-  updateAutomationJob(id: string, updates: Partial<Pick<AutomationJob, "status" | "progress" | "message" | "startedAt" | "completedAt">>) {
-    const fieldMap: Record<string, string> = { status: "status", progress: "progress", message: "message", startedAt: "started_at", completedAt: "completed_at" };
+  updateAutomationJob(id: string, updates: Partial<Pick<AutomationJob, "status" | "progress" | "message" | "startedAt" | "completedAt" | "proof" | "transcript">>) {
+    const fieldMap: Record<string, string> = { status: "status", progress: "progress", message: "message", startedAt: "started_at", completedAt: "completed_at", proof: "proof_file", transcript: "transcript_json" };
     const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
     if (!entries.length) return this.getAutomationJob(id);
     const assignments = entries.map(([key]) => `${fieldMap[key]} = ?`);
-    const values = entries.map(([, value]) => value);
+    const values = entries.map(([key, value]) => key === "transcript" ? JSON.stringify(value) : value);
     assignments.push("updated_at = ?");
     values.push(new Date().toISOString(), id);
     this.db.prepare(`UPDATE automation_jobs SET ${assignments.join(", ")} WHERE id = ?`).run(...values);
@@ -361,6 +374,31 @@ export class ReceiptRepository {
       updatedAt: row.updated_at,
       startedAt: row.started_at,
       completedAt: row.completed_at,
+      dryRun: row.dry_run === 1,
+      proof: row.proof_file,
+      transcript: row.transcript_json ? (JSON.parse(row.transcript_json) as SurveyPageSummary[]) : [],
     };
+  }
+
+  /** Every screenshot a receipt's runs produced, so deletion can clean them up. */
+  listAutomationProofs(receiptId: string) {
+    const rows = this.db.prepare("SELECT proof_file, transcript_json FROM automation_jobs WHERE receipt_id = ?").all(receiptId) as Array<{ proof_file: string | null; transcript_json: string | null }>;
+    const files: string[] = [];
+    for (const row of rows) {
+      if (row.proof_file) files.push(row.proof_file);
+      if (row.transcript_json) {
+        for (const page of JSON.parse(row.transcript_json) as SurveyPageSummary[]) {
+          if (page.screenshot) files.push(page.screenshot);
+        }
+      }
+    }
+    return files;
+  }
+
+  findAutomationProof(jobId: string, fileName: string) {
+    const job = this.getAutomationJob(jobId);
+    if (!job) return null;
+    const allowed = new Set([job.proof, ...job.transcript.map((page) => page.screenshot)].filter((entry): entry is string => Boolean(entry)));
+    return allowed.has(fileName) ? fileName : null;
   }
 }

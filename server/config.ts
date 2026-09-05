@@ -17,15 +17,16 @@ export function loadConfig(overrides: Partial<Record<keyof z.input<typeof envSch
   const parsed = envSchema.parse({ ...process.env, ...overrides });
   const dataDir = path.resolve(parsed.DATA_DIR);
 
-  if (parsed.NODE_ENV === "production" && !parsed.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is required in production");
-  }
+  // A credential is no longer required at boot: the Settings screen can supply
+  // one at runtime, and every AI action fails loudly when none is configured.
 
   return {
     ...parsed,
     ANTHROPIC_API_KEY: parsed.ANTHROPIC_API_KEY || undefined,
     dataDir,
     uploadDir: path.join(dataDir, "uploads"),
+    proofDir: path.join(dataDir, "survey-proofs"),
+    settingsKeyPath: path.join(dataDir, "settings.key"),
     databasePath: path.join(dataDir, "receipt-relay.sqlite"),
     maxUploadBytes: parsed.MAX_UPLOAD_MB * 1024 * 1024,
   };

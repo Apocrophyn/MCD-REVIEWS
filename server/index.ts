@@ -6,9 +6,9 @@ import { loadConfig } from "./config.js";
 if (fs.existsSync(".env")) process.loadEnvFile(".env");
 
 const config = loadConfig();
-const { app, aiProvider, repository } = createApp({ config });
+const { app, currentProvider, repository } = createApp({ config });
 const server = app.listen(config.PORT, "127.0.0.1", () => {
-  console.log(`Receipt Relay API listening on http://127.0.0.1:${config.PORT} (${aiProvider.name})`);
+  console.log(`Receipt Relay API listening on http://127.0.0.1:${config.PORT} (${currentProvider().provider.name})`);
 });
 
 function shutdown() {

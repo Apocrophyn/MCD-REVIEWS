@@ -8,14 +8,16 @@ import helmet from "helmet";
 import multer from "multer";
 import { z } from "zod";
 import type { AIProvider, ReceiptImageInput } from "./ai/provider.js";
-import { AnthropicProvider } from "./ai/anthropic-provider.js";
+import { findProvider, providerCatalog } from "./ai/catalog.js";
+import { resolveProvider, verifyCredential, type ResolvedProvider } from "./ai/factory.js";
 import { DisabledAIProvider } from "./ai/disabled-provider.js";
 import { TestAIProvider } from "./ai/test-provider.js";
 import { type AppConfig, loadConfig } from "./config.js";
 import { DuplicateReceiptError, ReceiptRepository } from "./database.js";
 import { validateAndComposeFeedback, type GroundingFacts } from "./domain/grounding.js";
-import { normalizeItemName, normalizeSurveyCode } from "./domain/normalize.js";
+import { formatSurveyCode, isValidSurveyCode, normalizeItemName, normalizeSurveyCode } from "./domain/normalize.js";
 import { experienceSchema, receiptExtractionSchema } from "./domain/schemas.js";
+import { maskToken, SettingsStore, type StoredCredential } from "./settings.js";
 import { ImageValidationError, inspectImage } from "./image-quality.js";
 import { McDonaldsFoodForThoughtProvider, type SurveyProvider } from "./survey/provider.js";
 import { PlaywrightSurveyAutomator, TestSurveyAutomator, type SurveyAutomationPayload, type SurveyAutomator } from "./survey/automation.js";
@@ -41,15 +43,33 @@ const employeeSchema = z.object({
   role: z.string().trim().max(80).default(""),
 });
 
+const credentialSchema = z.object({
+  providerId: z.string().trim().min(1),
+  token: z.string().trim().min(8).max(500),
+  model: z.string().trim().max(120).default(""),
+  baseUrl: z.union([z.url(), z.literal("")]).default(""),
+});
+
+const automationRequestSchema = z.object({ dryRun: z.boolean().default(false) });
+
 export function createApp(dependencies: AppDependencies = {}) {
   const config = dependencies.config ?? loadConfig();
   fs.mkdirSync(config.uploadDir, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(config.proofDir, { recursive: true, mode: 0o700 });
   const repository = dependencies.repository ?? new ReceiptRepository(config.databasePath);
-  const aiProvider = dependencies.aiProvider ?? (config.ANTHROPIC_API_KEY
-    ? new AnthropicProvider(config.ANTHROPIC_API_KEY, config.ANTHROPIC_MODEL)
-    : config.NODE_ENV === "test" ? new TestAIProvider() : new DisabledAIProvider());
+  const settings = new SettingsStore(repository.db, config.settingsKeyPath);
+
+  // The active model provider is resolved on every request so a credential
+  // saved in Settings takes effect without restarting the server.
+  const injectedProvider = dependencies.aiProvider ?? (config.NODE_ENV === "test" && !config.ANTHROPIC_API_KEY ? new TestAIProvider() : undefined);
+  const currentProvider = (): ResolvedProvider => injectedProvider
+    ? { provider: injectedProvider, definition: null, model: config.ANTHROPIC_MODEL, supportsVision: true, source: "environment" }
+    : resolveProvider(settings.getCredential(), { apiKey: config.ANTHROPIC_API_KEY, model: config.ANTHROPIC_MODEL });
+
   const surveyProvider = dependencies.surveyProvider ?? new McDonaldsFoodForThoughtProvider();
-  const surveyAutomator = dependencies.surveyAutomator ?? (config.NODE_ENV === "test" ? new TestSurveyAutomator() : new PlaywrightSurveyAutomator());
+  const surveyAutomator = dependencies.surveyAutomator ?? (config.NODE_ENV === "test"
+    ? new TestSurveyAutomator()
+    : new PlaywrightSurveyAutomator({ proofDir: config.proofDir, showBrowser: settings.getAutomationPreferences().showBrowser }));
   repository.recoverAutomationJobs();
   let automationQueue = Promise.resolve();
   const app = express();
@@ -64,11 +84,14 @@ export function createApp(dependencies: AppDependencies = {}) {
         });
         const completedAt = new Date().toISOString();
         if (result.outcome === "completed") {
+          // Only a real submission moves the receipt to completed.
           const receipt = repository.getReceipt(receiptId);
           if (receipt && ["ready", "scheduled"].includes(receipt.status)) repository.updateReceipt(receiptId, { status: "completed", scheduledAt: null });
-          repository.updateAutomationJob(jobId, { status: "completed", progress: 100, message: result.message, completedAt });
+          repository.updateAutomationJob(jobId, { status: "completed", progress: 100, message: result.message, completedAt, proof: result.proof, transcript: result.transcript });
+        } else if (result.outcome === "dry_run_complete") {
+          repository.updateAutomationJob(jobId, { status: "completed", progress: 100, message: result.message, completedAt, proof: result.proof, transcript: result.transcript });
         } else {
-          repository.updateAutomationJob(jobId, { status: "needs_attention", message: result.message, completedAt });
+          repository.updateAutomationJob(jobId, { status: "needs_attention", message: result.message, completedAt, proof: result.proof, transcript: result.transcript });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "The background browser could not complete the survey";
@@ -89,7 +112,80 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, aiProvider: aiProvider.name, analysisEnabled: !(aiProvider instanceof DisabledAIProvider), surveyAutomator: surveyAutomator.name, automationEnabled: surveyAutomator.available, maxUploadMb: config.MAX_UPLOAD_MB, maxImages: config.MAX_IMAGES_PER_RECEIPT });
+    const active = currentProvider();
+    const configured = !(active.provider instanceof DisabledAIProvider);
+    res.json({
+      ok: true,
+      aiProvider: active.provider.name,
+      aiModel: active.model,
+      aiSource: active.source,
+      analysisEnabled: configured && active.supportsVision,
+      feedbackEnabled: configured,
+      visionSupported: active.supportsVision,
+      surveyAutomator: surveyAutomator.name,
+      automationEnabled: surveyAutomator.available,
+      showBrowser: settings.getAutomationPreferences().showBrowser,
+      maxUploadMb: config.MAX_UPLOAD_MB,
+      maxImages: config.MAX_IMAGES_PER_RECEIPT,
+    });
+  });
+
+  app.get("/api/settings/providers", (_req, res) => {
+    const credential = settings.getCredential();
+    const active = currentProvider();
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      providers: providerCatalog.map(({ id, label, credentialLabel, credentialHint, defaultModel, visionModels, supportsVision, editableBaseUrl, notes, docsUrl, baseUrl }) => ({
+        id, label, credentialLabel, credentialHint, defaultModel, visionModels, supportsVision, editableBaseUrl, notes, docsUrl, baseUrl,
+      })),
+      // The token itself never leaves the server; only a recognisable mask does.
+      credential: credential
+        ? { providerId: credential.providerId, model: credential.model, baseUrl: credential.baseUrl, maskedToken: maskToken(credential.token), updatedAt: credential.updatedAt }
+        : null,
+      active: { name: active.provider.name, model: active.model, source: active.source, supportsVision: active.supportsVision },
+      environmentKeyPresent: Boolean(config.ANTHROPIC_API_KEY),
+    });
+  });
+
+  app.put("/api/settings/credential", asyncRoute(async (req, res) => {
+    const input = credentialSchema.parse(req.body);
+    const definition = findProvider(input.providerId);
+    if (!definition) return res.status(400).json({ error: "Choose one of the supported model providers" });
+    if (definition.tokenPrefixes.length && !definition.tokenPrefixes.some((prefix) => input.token.startsWith(prefix))) {
+      return res.status(400).json({ error: `That does not look like a ${definition.credentialLabel}. It should start with ${definition.tokenPrefixes.join(" or ")}.` });
+    }
+    if (definition.editableBaseUrl && !input.baseUrl) return res.status(400).json({ error: "A custom endpoint needs its base URL" });
+    const credential: StoredCredential = {
+      providerId: input.providerId,
+      token: input.token,
+      model: input.model || definition.defaultModel,
+      baseUrl: input.baseUrl,
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      const verification = await verifyCredential(credential);
+      settings.setCredential(credential);
+      return res.json({ ...verification });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The credential could not be verified";
+      return res.status(400).json({ error: `${definition.label} rejected that credential: ${message}` });
+    }
+  }));
+
+  app.delete("/api/settings/credential", (_req, res) => {
+    settings.clearCredential();
+    res.status(204).end();
+  });
+
+  app.put("/api/settings/automation", (req, res, next) => {
+    try {
+      const input = z.object({ showBrowser: z.boolean() }).parse(req.body);
+      settings.setAutomationPreferences(input);
+      if (surveyAutomator instanceof PlaywrightSurveyAutomator) surveyAutomator.setShowBrowser(input.showBrowser);
+      return res.json(input);
+    } catch (error) {
+      return next(error);
+    }
   });
 
   app.get("/api/receipts", (req, res) => {
@@ -154,8 +250,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       buffer: await fs.promises.readFile(path.join(config.uploadDir, image.fileName)),
       mimeType: image.mimeType as ReceiptImageInput["mimeType"],
     })));
+    const active = currentProvider();
+    if (!active.supportsVision && !(active.provider instanceof DisabledAIProvider)) {
+      return res.status(400).json({ error: `${active.provider.name} cannot read images. Choose a vision-capable model in Settings, or enter the receipt details by hand.` });
+    }
     try {
-      const analysis = await aiProvider.analyzeReceipt(inputs);
+      const analysis = await active.provider.analyzeReceipt(inputs);
       const accepted = analysis.classification.isReceipt
         && analysis.classification.confidence >= 0.75
         && analysis.classification.evidence.length >= 2
@@ -213,7 +313,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       satisfaction: experience.satisfaction,
       notes: experience.notes,
     };
-    const claims = await aiProvider.generateFeedback(facts);
+    const claims = await currentProvider().provider.generateFeedback(facts);
     const feedback = validateAndComposeFeedback(claims, facts);
     const updated = repository.updateReceipt(receipt.id, { experience, feedback, status: receipt.status === "ready_for_confirmation" ? "draft" : undefined });
     return res.json({ receipt: updated });
@@ -226,7 +326,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       if (!receipt.store || !receipt.surveyCode || !receipt.experience || !receipt.feedback.trim()) {
         return res.status(400).json({ error: "Confirm the receipt, experience, and feedback before approval" });
       }
-      if (!/^\d{12}$/.test(receipt.surveyCode)) return res.status(400).json({ error: "Confirm the 12-digit Food for Thoughts code" });
+      if (!isValidSurveyCode(receipt.surveyCode)) return res.status(400).json({ error: "Confirm the 12-character Food for Thoughts code printed under \u201CTell us how we did\u201D (for example MKYW-ZM3N-L9VG)" });
       if (receipt.total == null || receipt.total <= 0 || receipt.total > 999.99) return res.status(400).json({ error: "Confirm the amount spent on the receipt" });
       if (!receipt.experience.acceptSurveyTerms) return res.status(400).json({ error: "Confirm the official survey terms before approval" });
       const preparation = surveyProvider.prepare(receipt);
@@ -250,35 +350,54 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
   });
 
-  app.post("/api/receipts/:id/automation", (req, res) => {
-    const receipt = repository.getReceipt(String(req.params.id));
-    if (!receipt) return res.status(404).json({ error: "Receipt not found" });
-    if (!["ready", "scheduled"].includes(receipt.status) || !receipt.experience || !receipt.feedback) {
-      return res.status(409).json({ error: "Approve the confirmed receipt and feedback before running the survey" });
+  app.post("/api/receipts/:id/automation", (req, res, next) => {
+    try {
+      const { dryRun } = automationRequestSchema.parse(req.body ?? {});
+      const receipt = repository.getReceipt(String(req.params.id));
+      if (!receipt) return res.status(404).json({ error: "Receipt not found" });
+      if (!["ready", "scheduled"].includes(receipt.status) || !receipt.experience || !receipt.feedback) {
+        return res.status(409).json({ error: "Approve the confirmed receipt and feedback before running the survey" });
+      }
+      if (!isValidSurveyCode(receipt.surveyCode)) {
+        return res.status(400).json({ error: "Food for Thoughts requires the 12-character code printed under \u201CTell us how we did\u201D (for example MKYW-ZM3N-L9VG)" });
+      }
+      if (receipt.total == null || receipt.total <= 0 || receipt.total > 999.99) return res.status(400).json({ error: "Confirm the receipt amount before starting the survey" });
+      if (!surveyAutomator.available) return res.status(503).json({ error: "The background browser is not installed. Run: npx playwright install chromium" });
+      if (!receipt.experience.acceptSurveyTerms) return res.status(400).json({ error: "Confirm the survey terms before starting background completion" });
+      const active = repository.getActiveAutomationJob(receipt.id);
+      if (active) return res.status(202).json({ job: active });
+      const now = new Date().toISOString();
+      const job = repository.createAutomationJob({
+        id: randomUUID(), receiptId: receipt.id, status: "queued", progress: 0,
+        message: dryRun ? "Waiting to start a practice run" : "Waiting to start", createdAt: now, updatedAt: now, dryRun,
+      });
+      const payload: SurveyAutomationPayload = {
+        receipt: {
+          store: receipt.store,
+          visitedAt: receipt.visitedAt,
+          orderNumber: receipt.orderNumber,
+          surveyCode: receipt.surveyCode,
+          total: receipt.total,
+          items: receipt.items.map((item) => ({ quantity: item.quantity, name: item.normalizedName })),
+        },
+        experience: receipt.experience,
+        feedback: receipt.feedback,
+        dryRun,
+      };
+      enqueueAutomation(job.id, receipt.id, payload);
+      return res.status(202).json({ job });
+    } catch (error) {
+      return next(error);
     }
-    if (!/^\d{12}$/.test(receipt.surveyCode)) return res.status(400).json({ error: "Food for Thoughts requires the 12-digit code from the top of the receipt" });
-    if (receipt.total == null || receipt.total <= 0 || receipt.total > 999.99) return res.status(400).json({ error: "Confirm the receipt amount before starting the survey" });
-    if (!surveyAutomator.available) return res.status(503).json({ error: "The background browser is not installed. Run: npx playwright install chromium" });
-    if (!receipt.experience.acceptSurveyTerms) return res.status(400).json({ error: "Confirm the survey terms before starting background completion" });
-    const active = repository.getActiveAutomationJob(receipt.id);
-    if (active) return res.status(202).json({ job: active });
-    const now = new Date().toISOString();
-    const job = repository.createAutomationJob({ id: randomUUID(), receiptId: receipt.id, status: "queued", progress: 0, message: "Waiting to start", createdAt: now, updatedAt: now });
-    const payload: SurveyAutomationPayload = {
-      receipt: {
-        store: receipt.store,
-        visitedAt: receipt.visitedAt,
-        orderNumber: receipt.orderNumber,
-        surveyCode: receipt.surveyCode,
-        total: receipt.total,
-        items: receipt.items.map((item) => ({ quantity: item.quantity, name: item.normalizedName })),
-      },
-      experience: receipt.experience,
-      feedback: receipt.feedback,
-    };
-    enqueueAutomation(job.id, receipt.id, payload);
-    return res.status(202).json({ job });
   });
+
+  app.get("/api/automation/jobs/:id/proof/:file", asyncRoute(async (req, res) => {
+    const fileName = repository.findAutomationProof(String(req.params.id), String(req.params.file));
+    if (!fileName) return res.status(404).json({ error: "Screenshot not found" });
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    return res.send(await fs.promises.readFile(path.join(config.proofDir, fileName)));
+  }));
 
   app.get("/api/automation/jobs/:id", (req, res) => {
     const job = repository.getAutomationJob(String(req.params.id));
@@ -320,9 +439,13 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   app.delete("/api/receipts/:id", asyncRoute(async (req, res) => {
+    const proofs = repository.listAutomationProofs(String(req.params.id));
     const result = repository.deleteReceipt(String(req.params.id));
     if (!result.deleted) return res.status(404).json({ error: "Receipt not found" });
-    await Promise.all(result.images.map((image) => fs.promises.unlink(path.join(config.uploadDir, image.file_name)).catch(() => undefined)));
+    await Promise.all([
+      ...result.images.map((image) => fs.promises.unlink(path.join(config.uploadDir, image.file_name)).catch(() => undefined)),
+      ...proofs.map((fileName) => fs.promises.unlink(path.join(config.proofDir, fileName)).catch(() => undefined)),
+    ]);
     return res.status(204).end();
   }));
 
@@ -358,5 +481,5 @@ export function createApp(dependencies: AppDependencies = {}) {
     return res.status(500).json({ error: config.NODE_ENV === "production" ? "Something went wrong" : message });
   });
 
-  return { app, repository, aiProvider, surveyAutomator, config };
+  return { app, repository, settings, currentProvider, surveyAutomator, config };
 }

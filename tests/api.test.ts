@@ -10,6 +10,7 @@ import { loadConfig } from "../server/config.js";
 let testDir: string;
 let app: ReturnType<typeof createApp>["app"];
 let repository: ReturnType<typeof createApp>["repository"];
+let settings: ReturnType<typeof createApp>["settings"];
 let receiptId = "";
 
 async function receiptFixture(seed = 0) {
@@ -44,6 +45,7 @@ beforeAll(() => {
   const created = createApp({ config: loadConfig({ NODE_ENV: "test", DATA_DIR: testDir }) });
   app = created.app;
   repository = created.repository;
+  settings = created.settings;
 });
 
 afterAll(() => {
@@ -163,5 +165,79 @@ describe("receipt API lifecycle", () => {
     await request(app).delete(`/api/receipts/${receiptId}`).expect(204);
     expect(repository.getReceipt(receiptId)).toBeNull();
     expect(fs.existsSync(storedPath)).toBe(false);
+  });
+  it("accepts the 12-character alphanumeric UK survey code and rejects malformed ones", async () => {
+    const buffer = await receiptFixture(31);
+    const created = await request(app).post("/api/receipts").attach("images", buffer, "receipt.jpg").expect(201);
+    const id = created.body.receipt.id as string;
+    await request(app).post(`/api/receipts/${id}/analyze`).expect(200);
+    await request(app).post(`/api/receipts/${id}/feedback`).send({ attributes: ["service"], satisfaction: 5, notes: "", employeeId: null, acceptSurveyTerms: true }).expect(200);
+
+    // The real receipt code from a McDonald's UK till slip.
+    await request(app).patch(`/api/receipts/${id}`).send({ store: "Wickham Road", surveyCode: "MKYW-ZM3N-L9VG", total: 13.27 }).expect(200);
+    const approved = await request(app).post(`/api/receipts/${id}/approve`).expect(200);
+    expect(approved.body.receipt.surveyCode).toBe("MKYWZM3NL9VG");
+
+    await request(app).patch(`/api/receipts/${id}`).send({ surveyCode: "MKYW-ZM3N" }).expect(200);
+    const rejected = await request(app).post(`/api/receipts/${id}/automation`).expect(400);
+    expect(rejected.body.error).toMatch(/12-character/);
+    await request(app).delete(`/api/receipts/${id}`).expect(204);
+  });
+
+  it("keeps a practice run from marking the receipt completed", async () => {
+    const buffer = await receiptFixture(32);
+    const created = await request(app).post("/api/receipts").attach("images", buffer, "receipt.jpg").expect(201);
+    const id = created.body.receipt.id as string;
+    await request(app).post(`/api/receipts/${id}/analyze`).expect(200);
+    await request(app).post(`/api/receipts/${id}/feedback`).send({ attributes: ["service"], satisfaction: 5, notes: "", employeeId: null, acceptSurveyTerms: true }).expect(200);
+    await request(app).patch(`/api/receipts/${id}`).send({ store: "Wickham Road", surveyCode: "MKYW-ZM3N-L9VG", total: 13.27 }).expect(200);
+    await request(app).post(`/api/receipts/${id}/approve`).expect(200);
+
+    const started = await request(app).post(`/api/receipts/${id}/automation`).send({ dryRun: true }).expect(202);
+    let job = started.body.job;
+    expect(job.dryRun).toBe(true);
+    for (let attempt = 0; attempt < 30 && job.status !== "completed"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      job = (await request(app).get(`/api/automation/jobs/${job.id}`).expect(200)).body.job;
+    }
+    expect(job.status).toBe("completed");
+    const receipt = await request(app).get(`/api/receipts/${id}`).expect(200);
+    expect(receipt.body.receipt.status).toBe("ready");
+    await request(app).delete(`/api/receipts/${id}`).expect(204);
+  });
+
+  it("lists model providers and refuses a credential with the wrong shape", async () => {
+    const providers = await request(app).get("/api/settings/providers").expect(200);
+    const ids = providers.body.providers.map((entry: { id: string }) => entry.id);
+    expect(ids).toEqual(expect.arrayContaining(["anthropic-api", "anthropic-oauth", "openai", "deepseek", "openrouter"]));
+    expect(providers.body.credential).toBeNull();
+
+    const wrongPrefix = await request(app).put("/api/settings/credential")
+      .send({ providerId: "anthropic-oauth", token: "sk-ant-api03-not-an-oauth-token", model: "" })
+      .expect(400);
+    expect(wrongPrefix.body.error).toMatch(/sk-ant-oat/);
+
+    await request(app).put("/api/settings/credential").send({ providerId: "nonsense", token: "abcdefghij", model: "" }).expect(400);
+    expect((await request(app).get("/api/settings/providers").expect(200)).body.credential).toBeNull();
+  });
+
+  it("masks a stored token instead of returning it", async () => {
+    const secret = "sk-ant-oat01-supersecrettokenvalue-0000";
+    settings.setCredential({ providerId: "anthropic-oauth", token: secret, model: "claude-sonnet-5", baseUrl: "", updatedAt: new Date().toISOString() });
+    const response = await request(app).get("/api/settings/providers").expect(200);
+    expect(response.body.credential.maskedToken).toContain("\u2022");
+    expect(JSON.stringify(response.body)).not.toContain(secret);
+    // The plaintext is also absent from the database file itself.
+    expect(fs.readFileSync(path.join(testDir, "receipt-relay.sqlite")).toString("utf8")).not.toContain(secret);
+
+    await request(app).delete("/api/settings/credential").expect(204);
+    expect((await request(app).get("/api/settings/providers").expect(200)).body.credential).toBeNull();
+  });
+
+  it("stores the survey browser visibility preference", async () => {
+    await request(app).put("/api/settings/automation").send({ showBrowser: true }).expect(200);
+    expect((await request(app).get("/api/health").expect(200)).body.showBrowser).toBe(true);
+    await request(app).put("/api/settings/automation").send({ showBrowser: false }).expect(200);
+    expect((await request(app).get("/api/health").expect(200)).body.showBrowser).toBe(false);
   });
 });

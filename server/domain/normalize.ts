@@ -21,6 +21,22 @@ export function normalizeSurveyCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+/**
+ * McDonald's UK prints a 12-character alphanumeric Food for Thoughts code
+ * grouped as XXXX-XXXX-XXXX (for example MKYW-ZM3N-L9VG). Treating it as
+ * 12 digits rejected every real UK receipt.
+ */
+export const SURVEY_CODE_PATTERN = /^[A-Z0-9]{12}$/;
+
+export function isValidSurveyCode(value: string) {
+  return SURVEY_CODE_PATTERN.test(normalizeSurveyCode(value));
+}
+
+export function formatSurveyCode(value: string) {
+  const code = normalizeSurveyCode(value);
+  return code.length === 12 ? `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8, 12)}` : code;
+}
+
 export function receiptFingerprint(parts: {
   store: string;
   visitedAt: string | null;

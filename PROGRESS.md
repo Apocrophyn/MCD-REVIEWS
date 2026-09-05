@@ -1,6 +1,6 @@
 # PROGRESS.md
 
-Last Updated: 2026-09-04
+Last Updated: 2026-09-05
 
 ## Current Milestone
 
@@ -221,6 +221,54 @@ Current Phase: Phase 1 — Release Validation
 
 ---
 
+## Model Providers
+
+* [x] Credential entry in the app instead of only `.env`
+* [x] Encrypted local credential storage (AES-256-GCM under `.data/settings.key`)
+* [x] Masked read-back; plaintext never reaches the client or the database file
+* [x] Live verification request before a credential is saved
+* [x] Claude via Anthropic Console API key
+* [x] Claude via user-generated Pro/Max OAuth token (`claude setup-token`)
+* [x] OpenAI (ChatGPT API)
+* [x] DeepSeek, with an explicit no-vision warning
+* [x] Meta Llama via OpenRouter and Groq
+* [x] Custom OpenAI-compatible endpoint with editable base URL
+* [x] Editable model id per provider
+* [x] Shared receipt/feedback tool contract across all providers
+* [x] Settings changes take effect without a restart
+
+---
+
+## Fixed in this milestone
+
+* [x] Survey completion was reported from page wording alone, so an untouched
+      survey could be marked complete. Completion now requires answers actually
+      filled, a page with nothing left to answer, and a thank-you page.
+* [x] `page.evaluate` threw `ReferenceError: __name` under tsx, so real survey
+      runs never mapped a single field. Shim added.
+* [x] The receipt code was validated as 12 digits; McDonald's UK prints 12
+      alphanumeric characters (MKYW-ZM3N-L9VG). Every real UK receipt was rejected.
+* [x] The hosted interface preview fabricated an extraction for any uploaded
+      image and faked a completed survey. It now reports that it can do neither.
+* [x] The field mapper read the DOM before the survey had rendered, and could
+      not read grid questions. Matrix rows and column headers are now resolved.
+* [x] Machine-speed paging drew HTTP 400s from the survey host. Runs are now
+      paced at human speed, the code is typed key by key, and a rejected page is
+      recovered by stepping back rather than re-posting.
+
+---
+
+## Survey Evidence
+
+* [x] Full-page screenshot of the page every run ends on
+* [x] Screenshot shown in the app as proof of submission
+* [x] Page-by-page transcript of questions asked and answers given
+* [x] Practice run that fills every page and stops at the submit button
+* [x] Supervised live run script (`npm run survey:dry-run`)
+* [x] Optional visible browser toggle in Settings
+
+---
+
 ## In Progress
 
 None.
@@ -229,19 +277,24 @@ None.
 
 ## Next
 
-1. Add a real Anthropic Console API key and perform a live receipt smoke test.
-2. Perform a live background survey smoke test with an eligible receipt.
-3. Complete physical-device sign-off in iPhone Safari.
-4. Choose a deployment target if access beyond the local machine is required.
+1. Perform a live *submitting* survey run with an eligible receipt and confirm the thank-you screenshot.
+2. Complete physical-device sign-off in iPhone Safari.
+3. Choose a deployment target if access beyond the local machine is required.
 
 ---
 
 ## Blocked
 
-No implementation blockers. Live Claude validation requires an Anthropic Console API key. Live survey validation requires an eligible receipt; physical iPhone sign-off requires an iOS device.
+No implementation blockers. Live submission validation is deliberately deferred
+until the user chooses to spend a receipt code; practice runs have been verified
+against the real survey through the code entry, visit type, overall satisfaction
+and satisfaction-grid pages.
 
 ---
 
 ## Known Bugs
 
-None known.
+The survey host intermittently answers HTTP 400 to an automated session and
+serves nothing at all to a headless browser. Runs are headed, paced, and retry
+by stepping back; a page that stays rejected is reported as needing attention
+rather than being retried indefinitely.

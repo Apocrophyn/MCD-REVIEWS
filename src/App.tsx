@@ -26,6 +26,10 @@ export default function App() {
     setReceipts(result);
   }, []);
 
+  const refreshHealth = useCallback(() => {
+    void api.health().then(setHealth).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     Promise.all([api.health(), api.listReceipts()]).then(([healthResult, receiptResult]) => {
       setHealth(healthResult);
@@ -48,7 +52,7 @@ export default function App() {
         if (canceled) return;
         setAutomationJob(job);
         if (job.status === "completed") {
-          setNotice({ type: "success", message: "Food for Thoughts survey completed in the background" });
+          setNotice({ type: "success", message: job.dryRun ? "Practice run finished — nothing was submitted" : "Food for Thoughts survey completed in the background" });
           if (activeReceipt?.id === job.receiptId) {
             const { receipt } = await api.getReceipt(activeReceipt.id);
             if (!canceled) setActiveReceipt(receipt);
@@ -129,17 +133,17 @@ export default function App() {
     });
   };
 
-  const approve = async (update: Partial<Receipt>, experience: Experience, feedback: string) => {
+  const approve = async (update: Partial<Receipt>, experience: Experience, feedback: string, dryRun: boolean) => {
     if (!activeReceipt) return;
     await run(async () => {
       await api.update(activeReceipt.id, { ...update, experience, feedback });
       if (!feedback.trim()) await api.feedback(activeReceipt.id, experience);
       const result = await api.approve(activeReceipt.id);
       setActiveReceipt(result.receipt);
-      const { job } = await api.automation(activeReceipt.id);
+      const { job } = await api.automation(activeReceipt.id, dryRun);
       setAutomationJob(job);
       await refresh();
-      setNotice({ type: "success", message: "Survey is now running in the background" });
+      setNotice({ type: "success", message: dryRun ? "Practice run started — it will stop before submitting" : "Survey is now running in the background" });
     });
   };
 
@@ -179,7 +183,7 @@ export default function App() {
     {view === "quality" && activeReceipt ? <QualityScreen receipt={activeReceipt} busy={busy} analysisEnabled={health?.analysisEnabled ?? false} onBack={() => navigate("home")} onAnalyze={analyze} onRetake={discardCapture} /> : null}
     {view === "confirm" && activeReceipt ? <ReceiptEditor key={activeReceipt.id} receipt={activeReceipt} busy={busy} automationJob={automationJob?.receiptId === activeReceipt.id ? automationJob : null} onBack={() => navigate("queue")} onSave={save} onGenerate={generate} onApprove={approve} onDelete={remove} /> : null}
     {view === "queue" ? <QueueScreen receipts={receipts} historyOnly={historyOnly} busy={busy} onOpen={openReceipt} onRetry={retry} onCancel={cancel} onArchive={archive} /> : null}
-    {view === "settings" ? <SettingsScreen health={health} /> : null}
+    {view === "settings" ? <SettingsScreen health={health} onHealthChange={refreshHealth} /> : null}
     {notice ? <div className={`toast toast-${notice.type}`} role="status">{notice.type === "success" ? <CheckCircle2 /> : <AlertCircle />}<span>{notice.message}</span><button onClick={() => setNotice(null)} aria-label="Dismiss"><X /></button></div> : null}
   </AppShell>;
 }

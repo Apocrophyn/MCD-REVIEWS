@@ -1,6 +1,6 @@
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, CircleUserRound, FileText, LoaderCircle, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, CircleUserRound, FileText, FlaskConical, LoaderCircle, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, imageUrl } from "../lib/api";
+import { api, imageUrl, proofUrl } from "../lib/api";
 import type { AutomationJob, Employee, Experience, Receipt, ReceiptItem } from "../types";
 import { IconWell } from "./IconWell";
 
@@ -18,7 +18,7 @@ interface Props {
   onBack: () => void;
   onSave: (update: Partial<Receipt>) => Promise<void>;
   onGenerate: (update: Partial<Receipt>, experience: Experience) => Promise<void>;
-  onApprove: (update: Partial<Receipt>, experience: Experience, feedback: string) => Promise<void>;
+  onApprove: (update: Partial<Receipt>, experience: Experience, feedback: string, dryRun: boolean) => Promise<void>;
   onDelete: () => Promise<void>;
 }
 
@@ -39,9 +39,15 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
   const [addingEmployee, setAddingEmployee] = useState(false);
   const [newRole, setNewRole] = useState("");
   const jobActive = automationJob && ["queued", "running"].includes(automationJob.status);
-  const jobComplete = automationJob?.status === "completed" || receipt.status === "completed";
-  const normalizedSurveyCode = surveyCode.replace(/[^a-z0-9]/gi, "");
-  const hasValidSurveyCode = /^\d{12}$/.test(normalizedSurveyCode);
+  // A finished practice run must not lock the real submission out.
+  const jobComplete = (automationJob?.status === "completed" && !automationJob.dryRun) || receipt.status === "completed";
+  // McDonald's UK prints a 12-character alphanumeric code (MKYW-ZM3N-L9VG),
+  // so digits-only validation rejected every real receipt.
+  const normalizedSurveyCode = surveyCode.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  const hasValidSurveyCode = /^[A-Z0-9]{12}$/.test(normalizedSurveyCode);
+  const groupedSurveyCode = normalizedSurveyCode.length === 12
+    ? `${normalizedSurveyCode.slice(0, 4)}-${normalizedSurveyCode.slice(4, 8)}-${normalizedSurveyCode.slice(8, 12)}`
+    : "";
   const parsedTotal = total === "" ? null : Number(total);
   const hasValidTotal = parsedTotal != null && Number.isFinite(parsedTotal) && parsedTotal > 0 && parsedTotal <= 999.99;
   const canApprove = Boolean(store.trim() && hasValidSurveyCode && hasValidTotal && experience.satisfaction && experience.acceptSurveyTerms && !jobActive && !jobComplete);
@@ -96,7 +102,10 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
           <div className="field-row"><label htmlFor="store">Store</label><input id="store" value={store} onChange={(event) => setStore(event.target.value)} /></div>
           <div className="field-row"><label htmlFor="date">Date</label><input id="date" type="datetime-local" value={visitedAt} onChange={(event) => setVisitedAt(event.target.value)} /></div>
           <div className="field-row"><label htmlFor="order">Order number</label><input id="order" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} /></div>
-          <div className="field-row"><label htmlFor="survey">12-digit code</label><input id="survey" inputMode="numeric" maxLength={16} aria-invalid={surveyCode.length > 0 && !hasValidSurveyCode} value={surveyCode} onChange={(event) => setSurveyCode(event.target.value)} /></div>
+          <div className="field-row"><label htmlFor="survey">Survey code</label><input id="survey" autoCapitalize="characters" spellCheck={false} maxLength={16} placeholder="MKYW-ZM3N-L9VG" aria-invalid={surveyCode.length > 0 && !hasValidSurveyCode} aria-describedby="survey-hint" value={surveyCode} onChange={(event) => setSurveyCode(event.target.value.toUpperCase())} /></div>
+          <p className="field-hint" id="survey-hint">{hasValidSurveyCode
+            ? `Reads as ${groupedSurveyCode} — 12 characters, ready for Food for Thoughts.`
+            : "12 letters and digits, printed under \u201CTell us how we did\u201D near the top of the receipt."}</p>
           <div className="field-row"><label htmlFor="total">Amount spent</label><input id="total" type="number" min="0.01" max="999.99" step="0.01" aria-invalid={total.length > 0 && !hasValidTotal} value={total} onChange={(event) => setTotal(event.target.value)} /></div>
         </div>
 
@@ -147,7 +156,8 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
         <div className="editor-section-heading"><IconWell><ShieldCheck /></IconWell><h2>Review & approve</h2></div>
         {jobComplete
           ? <div className="completed-action"><CheckCircle2 /> Survey completed</div>
-          : <button className="primary-button" disabled={busy || !canApprove} onClick={() => onApprove(receiptUpdate(), experience, feedback)}><ShieldCheck /> {busy ? "Starting survey…" : automationJob ? "Approve & run again" : "Approve & run survey"}</button>}
+          : <button className="primary-button" disabled={busy || !canApprove} onClick={() => onApprove(receiptUpdate(), experience, feedback, false)}><ShieldCheck /> {busy ? "Starting survey…" : automationJob ? "Approve & run again" : "Approve & run survey"}</button>}
+        {jobComplete ? null : <button className="secondary-button" disabled={busy || !canApprove} onClick={() => onApprove(receiptUpdate(), experience, feedback, true)}><FlaskConical /> Practice run (stops before submitting)</button>}
         <button className="secondary-button" disabled={busy} onClick={() => onSave({ ...receiptUpdate(), experience, feedback })}>Save draft</button>
         <p className="approval-note"><ShieldCheck /><span><strong>No survey tab required</strong><small>A private background browser fills and submits the official survey using only the answers confirmed here.</small></span></p>
         {automationJob ? <div className={`automation-panel automation-${automationJob.status}`} role="status">
@@ -155,6 +165,21 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
           <div><h3>{automationTitle(automationJob)}</h3><p>{automationJob.message}</p></div>
           <div className="automation-progress" role="progressbar" aria-label="Survey completion progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={automationJob.progress}><span style={{ transform: `scaleX(${automationJob.progress / 100})` }} /></div>
           {automationJob.status === "needs_attention" ? <small>Update any missing answer above, confirm the terms, and run it again. Receipt Relay will not guess.</small> : null}
+          {automationJob.dryRun && automationJob.status === "completed" ? <small>Practice run only — the receipt code is still unused and the receipt stays ready to submit.</small> : null}
+          {automationJob.proof ? <figure className="automation-proof">
+            <img src={proofUrl(automationJob.id, automationJob.proof)} alt={automationJob.dryRun ? "The survey page the practice run stopped on" : "The Food for Thoughts thank-you page confirming submission"} />
+            <figcaption>{automationJob.dryRun ? "Stopped here — nothing submitted" : "Proof of submission captured from Food for Thoughts"}</figcaption>
+          </figure> : null}
+          {automationJob.transcript.length ? <details className="automation-transcript">
+            <summary>What the survey asked ({automationJob.transcript.length} page{automationJob.transcript.length === 1 ? "" : "s"})</summary>
+            <ol>{automationJob.transcript.map((page) => <li key={page.index}>
+              <strong>{page.heading || `Page ${page.index}`}</strong>
+              <small>{page.filled} answer{page.filled === 1 ? "" : "s"} filled{page.action ? ` \u2192 ${page.action}` : ""}</small>
+              {page.questions.length ? <ul>{page.questions.slice(0, 8).map((question, index) => <li key={index} className={question.answered ? "answered" : "unanswered"}>
+                {question.answered ? <Check /> : <X />}<span>{question.prompt}{question.answered && question.answer ? `: ${question.answer}` : ""}</span>
+              </li>)}</ul> : null}
+            </li>)}</ol>
+          </details> : null}
         </div> : <div className="automation-ready"><Sparkles /><span><strong>Ready for one-click completion</strong><small>Approve once. Progress and the final result appear here while you stay in Receipt Relay.</small></span></div>}
         <button className="danger-link" disabled={busy} onClick={onDelete}><Trash2 /> Delete receipt and images</button>
       </aside>
@@ -170,7 +195,7 @@ function toLocalDateTime(value: string | null) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 function automationTitle(job: AutomationJob) {
-  if (job.status === "completed") return "Survey completed";
+  if (job.status === "completed") return job.dryRun ? "Practice run finished" : "Survey completed";
   if (job.status === "needs_attention") return "Survey needs an answer";
   if (job.status === "failed") return "Survey could not finish";
   if (job.status === "running") return "Completing survey…";

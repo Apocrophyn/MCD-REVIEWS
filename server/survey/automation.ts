@@ -1,10 +1,12 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import fs from "node:fs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 import type { Experience, Receipt } from "../domain/schemas.js";
 
-export type SurveyAutomationOutcome = "completed" | "needs_attention";
+export type SurveyAutomationOutcome = "completed" | "needs_attention" | "dry_run_complete";
 
 export interface SurveyAutomationPayload {
   receipt: Pick<Receipt, "store" | "visitedAt" | "orderNumber" | "surveyCode" | "total"> & {
@@ -12,11 +14,51 @@ export interface SurveyAutomationPayload {
   };
   experience: Experience;
   feedback: string;
+  /** Fill every page, stop at the submit button, submit nothing. */
+  dryRun: boolean;
+}
+
+export interface SurveyQuestionRecord {
+  prompt: string;
+  kind: "text" | "radio" | "checkbox" | "select" | "textarea";
+  options: string[];
+  answered: boolean;
+  answer: string;
+  required: boolean;
+}
+
+export interface SurveyPageRecord {
+  index: number;
+  url: string;
+  heading: string;
+  questions: SurveyQuestionRecord[];
+  filled: number;
+  unansweredRequired: number;
+  action: string | null;
+  actionKind: "next" | "submit" | null;
+  screenshot: string | null;
 }
 
 export interface SurveyAutomationResult {
   outcome: SurveyAutomationOutcome;
   message: string;
+  /** Screenshot of the final page — the user's proof the survey was submitted. */
+  proof: string | null;
+  transcript: SurveyPageRecord[];
+}
+
+export interface SurveyAutomatorOptions {
+  /** Where page and proof screenshots are written. */
+  proofDir: string;
+  /** Show the Chromium window instead of parking it off-screen. */
+  showBrowser?: boolean;
+  surveyUrl?: string;
+  /** Real runs stay headed; only tests against a local fixture opt into headless. */
+  headless?: boolean;
+  /** Capture every page, not just the final one. Used by the supervised test run. */
+  captureEveryPage?: boolean;
+  /** "fast" removes the think time. Only for local fixtures — never the live survey. */
+  pacing?: "human" | "fast";
 }
 
 export interface SurveyAutomator {
@@ -25,54 +67,220 @@ export interface SurveyAutomator {
   run(payload: SurveyAutomationPayload, onProgress: (progress: number, message: string) => void): Promise<SurveyAutomationResult>;
 }
 
+const MAX_PAGES = 40;
+
+/** Human-scale think time. Slower than a bot, and far gentler on the survey host. */
+const pause = (minimum: number, maximum: number) => new Promise<void>((resolve) => setTimeout(resolve, minimum + Math.random() * (maximum - minimum)));
+
 export class PlaywrightSurveyAutomator implements SurveyAutomator {
   readonly name = "Background browser";
   get available() { return fs.existsSync(chromium.executablePath()); }
 
-  constructor(
-    private readonly surveyUrl = "https://www.mcdfoodforthoughts.com/",
-    private readonly headless = false,
-  ) {}
+  constructor(private options: SurveyAutomatorOptions) {}
+
+  /** Lets the Settings toggle take effect without restarting the server. */
+  setShowBrowser(showBrowser: boolean) {
+    this.options = { ...this.options, showBrowser };
+  }
 
   async run(payload: SurveyAutomationPayload, onProgress: (progress: number, message: string) => void): Promise<SurveyAutomationResult> {
-    onProgress(5, "Opening the official Food for Thoughts survey");
+    const surveyUrl = this.options.surveyUrl ?? "https://www.mcdfoodforthoughts.com/";
+    const headless = this.options.headless ?? false;
+    const offscreen = !headless && !this.options.showBrowser;
+    fs.mkdirSync(this.options.proofDir, { recursive: true, mode: 0o700 });
+    const fast = this.options.pacing === "fast";
+    const wait = (minimum: number, maximum: number) => fast ? pause(20, 60) : pause(minimum, maximum);
+
+    onProgress(5, payload.dryRun ? "Opening the survey for a practice run" : "Opening the official Food for Thoughts survey");
     const browser = await chromium.launch({
-      headless: this.headless,
-      args: this.headless ? [] : ["--window-position=-10000,-10000", "--window-size=1280,900"],
+      headless,
+      args: offscreen ? ["--window-position=-10000,-10000", "--window-size=1280,900"] : ["--window-size=1280,900"],
+      slowMo: this.options.showBrowser ? 120 : 0,
     });
+    const transcript: SurveyPageRecord[] = [];
+
     try {
-      const context = await browser.newContext({ locale: "en-GB", timezoneId: "Europe/London" });
+      const context = await browser.newContext({ locale: "en-GB", timezoneId: "Europe/London", viewport: { width: 1280, height: 900 } });
+      // The server runs through tsx, and esbuild's keepNames transform wraps
+      // functions in a `__name` helper that does not exist in the browser.
+      // Without this shim every page.evaluate below throws ReferenceError.
+      await context.addInitScript(() => {
+        const scope = globalThis as unknown as { __name?: (target: unknown) => unknown };
+        scope.__name ??= (target) => target;
+      });
       const page = await context.newPage();
-      await page.goto(this.surveyUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      page.setDefaultTimeout(30_000);
+      await page.goto(surveyUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
-      for (let step = 0; step < 30; step += 1) {
-        await page.waitForTimeout(650);
-        const state = await page.evaluate(fillSurveyPage, payload);
+      const capture = async (label: string) => {
+        const fileName = `${randomUUID()}-${label}.png`;
+        try {
+          await page.screenshot({ path: path.join(this.options.proofDir, fileName), fullPage: true });
+          return fileName;
+        } catch {
+          // A closed or crashed tab must not lose the result we already have.
+          return null;
+        }
+      };
+
+      // Food for Thoughts renders client-side and takes seconds to paint. Reading
+      // the DOM too early sees an empty body and looks like an unknown page.
+      const settle = async () => {
+        await page.waitForLoadState("domcontentloaded", { timeout: 25_000 }).catch(() => undefined);
+        await page.waitForFunction(
+          () => Boolean(document.body)
+            && (document.body.innerText.trim().length > 0 || document.querySelector("input, select, textarea, button") !== null),
+          undefined,
+          { timeout: 30_000 },
+        ).catch(() => undefined);
+        // The survey paints in stages, so let its own requests finish too.
+        if (!fast) await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+        await wait(900, 1_800);
+      };
+
+      // The survey host occasionally drops a request mid-flow and Chromium shows
+      // its own error page. Reloading the step is safe: nothing has been posted.
+      const recoverIfBroken = async () => {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const broken = page.url().startsWith("chrome-error")
+            || await page.evaluate(() => /this page isn.t working|err_|took too long to respond/i.test(document.body?.innerText ?? "")).catch(() => false);
+          if (!broken) return true;
+          recoveries += 1;
+          onProgress(0, `The survey did not respond. Waiting, then retrying the same page (attempt ${attempt + 1} of 2).`);
+          await wait(8_000 * (attempt + 1), 12_000 * (attempt + 1));
+          // Reloading would re-POST the request the host just rejected, so step
+          // back to the last good page and let the loop answer and continue it.
+          const recovered = await page.goBack({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => null);
+          if (!recovered) await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
+          await settle();
+        }
+        return !page.url().startsWith("chrome-error");
+      };
+
+      let submitted = false;
+      let pagesAdvanced = 0;
+      let totalFilled = 0;
+      let recoveries = 0;
+      let lastGoodUrl = "";
+
+      // The code and amount boxes drive ASP.NET validators on keystrokes, so they
+      // are typed rather than assigned. Everything else is mapped in the DOM pass.
+      const typeEntryFields = async () => {
+        const code = payload.receipt.surveyCode.replace(/[^a-z0-9]/gi, "").toUpperCase();
+        const amount = payload.receipt.total?.toFixed(2).split(".") ?? null;
+        const entries: Array<[string, string]> = [];
+        if (code.length === 12) entries.push(["#CN1", code.slice(0, 4)], ["#CN2", code.slice(4, 8)], ["#CN3", code.slice(8, 12)]);
+        if (amount) entries.push(["#AmountSpent1", amount[0]], ["#AmountSpent2", amount[1]]);
+        let typed = 0;
+        for (const [selector, value] of entries) {
+          const field = page.locator(selector);
+          if (!(await field.count()) || !(await field.isVisible().catch(() => false))) continue;
+          if (await field.inputValue().catch(() => "x")) continue;
+          await field.click({ timeout: 5_000 }).catch(() => undefined);
+          await field.pressSequentially(value, { delay: fast ? 5 : 90 + Math.random() * 70 }).catch(() => undefined);
+          // Leaving the field is what fires the page's own validators.
+          await field.press("Tab").catch(() => undefined);
+          typed += 1;
+        }
+        if (typed) await wait(600, 1_400);
+        return typed;
+      };
+
+      for (let step = 0; step < MAX_PAGES; step += 1) {
+        await settle();
+        if (!(await recoverIfBroken())) {
+          return { outcome: "needs_attention", message: "The official survey stopped responding and did not recover. Nothing was submitted; run it again later.", proof: await capture("survey-unreachable"), transcript };
+        }
+        // Recovering back onto the same page means the host is rejecting this
+        // step, not glitching. Retrying further would only hammer it.
+        if (recoveries >= 3 && page.url() === lastGoodUrl) {
+          return {
+            outcome: "needs_attention",
+            message: "The official survey rejected the same page three times, which usually means it is rate-limiting automated sessions. Nothing was submitted; wait a while and run it again.",
+            proof: await capture("survey-rejected"),
+            transcript,
+          };
+        }
+        lastGoodUrl = page.url();
+        const typed = await typeEntryFields();
+        const state = (await page.evaluate(fillSurveyPage, payload)) as PageState;
+        state.filled += typed;
+        totalFilled += state.filled;
+
+        const record: SurveyPageRecord = {
+          index: step + 1,
+          url: page.url(),
+          heading: state.heading,
+          questions: state.questions,
+          filled: state.filled,
+          unansweredRequired: state.unknownRequired,
+          action: state.action?.label ?? null,
+          actionKind: state.action?.kind ?? null,
+          screenshot: null,
+        };
+        if (this.options.captureEveryPage) record.screenshot = await capture(`page-${String(step + 1).padStart(2, "0")}`);
+        transcript.push(record);
+
         if (state.securityChallenge) {
-          return { outcome: "needs_attention", message: "The survey requested a security check. Receipt Relay did not attempt to bypass it." };
-        }
-        if (state.completed) {
-          onProgress(100, "Survey completed successfully");
-          return { outcome: "completed", message: "Food for Thoughts confirmed the survey was completed." };
+          return { outcome: "needs_attention", message: "The survey requested a security check. Receipt Relay did not attempt to bypass it.", proof: await capture("security-check"), transcript };
         }
 
-        onProgress(Math.min(92, 12 + step * 3), state.filled ? `Filled ${state.filled} answer${state.filled === 1 ? "" : "s"} on survey page ${step + 1}` : `Checking survey page ${step + 1}`);
+        // Completion is only believable once we have actually worked through the
+        // survey. Reading a stray "thank you" before a single answer was entered
+        // is exactly how a survey that was never taken used to be reported done.
+        if (state.completionEvidence && pagesAdvanced >= 1 && totalFilled > 0) {
+          onProgress(100, "Survey completed successfully");
+          return {
+            outcome: "completed",
+            message: state.completionCode
+              ? `Food for Thoughts confirmed the survey was completed. Validation code: ${state.completionCode}`
+              : `Food for Thoughts confirmed the survey was completed after ${totalFilled} confirmed answer${totalFilled === 1 ? "" : "s"}${submitted ? "" : " (the site finished without a separate submit step)"}.`,
+            proof: await capture("thank-you"),
+            transcript,
+          };
+        }
+
+        onProgress(
+          Math.min(92, 12 + step * 3),
+          state.filled ? `Filled ${state.filled} answer${state.filled === 1 ? "" : "s"} on survey page ${step + 1}` : `Checking survey page ${step + 1}`,
+        );
+
         if (state.pageError) {
-          return { outcome: "needs_attention", message: `The official survey reported: ${state.pageError}` };
+          return { outcome: "needs_attention", message: `The official survey reported: ${state.pageError}`, proof: await capture("survey-error"), transcript };
         }
         if (state.unknownRequired > 0) {
-          return { outcome: "needs_attention", message: "The survey contains a required question that could not be matched to a confirmed answer. Nothing was guessed." };
+          return {
+            outcome: "needs_attention",
+            message: `The survey asked ${state.unknownRequired} required question${state.unknownRequired === 1 ? "" : "s"} that could not be matched to a confirmed answer. Nothing was guessed.`,
+            proof: await capture("needs-answer"),
+            transcript,
+          };
         }
         if (!state.action) {
-          return { outcome: "needs_attention", message: "The survey page changed and no safe next action was recognized." };
+          return { outcome: "needs_attention", message: "The survey page changed and no safe next action was recognized.", proof: await capture("unrecognized-page"), transcript };
         }
 
-        await page.waitForTimeout(900);
+        if (payload.dryRun && state.action.kind === "submit") {
+          onProgress(100, "Practice run reached the submit step and stopped");
+          return {
+            outcome: "dry_run_complete",
+            message: `Practice run filled ${totalFilled} answer${totalFilled === 1 ? "" : "s"} across ${transcript.length} pages and stopped at "${state.action.label}". Nothing was submitted, so the receipt code is still unused.`,
+            proof: await capture("stopped-before-submit"),
+            transcript,
+          };
+        }
+
+        // Read-then-answer-then-continue at a human rhythm rather than instantly.
+        await wait(2_500, 5_500);
         const clicked = await page.evaluate(clickSurveyAction, state.action);
-        if (!clicked) return { outcome: "needs_attention", message: "The survey changed before the next safe action could be completed." };
-        await page.waitForLoadState("domcontentloaded", { timeout: 15_000 }).catch(() => undefined);
+        if (!clicked) {
+          return { outcome: "needs_attention", message: "The survey changed before the next safe action could be completed.", proof: await capture("action-lost"), transcript };
+        }
+        if (state.action.kind === "submit") submitted = true;
+        pagesAdvanced += 1;
       }
-      return { outcome: "needs_attention", message: "The survey exceeded the safe page limit and was stopped." };
+
+      return { outcome: "needs_attention", message: "The survey exceeded the safe page limit and was stopped.", proof: await capture("page-limit"), transcript };
     } finally {
       await browser.close();
     }
@@ -83,22 +291,28 @@ export class TestSurveyAutomator implements SurveyAutomator {
   readonly name = "Test background browser";
   readonly available = true;
 
-  async run(_payload: SurveyAutomationPayload, onProgress: (progress: number, message: string) => void): Promise<SurveyAutomationResult> {
+  async run(payload: SurveyAutomationPayload, onProgress: (progress: number, message: string) => void): Promise<SurveyAutomationResult> {
     onProgress(35, "Opening test survey");
     await new Promise((resolve) => setTimeout(resolve, 25));
     onProgress(80, "Filling confirmed test answers");
     await new Promise((resolve) => setTimeout(resolve, 25));
-    return { outcome: "completed", message: "Test survey completed successfully." };
+    if (payload.dryRun) {
+      return { outcome: "dry_run_complete", message: "Test practice run stopped before submitting.", proof: null, transcript: [] };
+    }
+    return { outcome: "completed", message: "Test survey completed successfully.", proof: null, transcript: [] };
   }
 }
 
 interface PageState {
+  heading: string;
   filled: number;
   unknownRequired: number;
-  completed: boolean;
+  completionEvidence: boolean;
+  completionCode: string | null;
   securityChallenge: boolean;
   pageError: string | null;
   action: { kind: "next" | "submit"; label: string } | null;
+  questions: SurveyQuestionRecord[];
 }
 
 function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
@@ -108,14 +322,55 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
     return !control.disabled && control.type !== "hidden" && element.getClientRects().length > 0;
   };
   const groupFor = (element: Element) => element.closest("fieldset, [role='radiogroup'], [role='group'], [class*='question' i], [id*='question' i], li") ?? element.parentElement;
+
+  // Food for Thoughts asks most questions as a grid: each row is a statement
+  // ("The ease of placing your order.") and each column is a point on a shared
+  // scale. Both live in table cells, so the control's own label is empty and
+  // the row/column headers have to be read to know what is being asked.
+  const cellOf = (element: Element) => element.closest("td, th");
+  const rowLabel = (element: Element) => {
+    const row = cellOf(element)?.closest("tr");
+    const first = row?.querySelector("th, td");
+    return first && !first.contains(element) ? normalize(first.textContent) : "";
+  };
+  const columnHeader = (element: Element) => {
+    const cell = cellOf(element);
+    const row = cell?.closest("tr");
+    const table = row?.closest("table");
+    if (!cell || !row || !table) return "";
+    const index = [...row.children].indexOf(cell);
+    if (index < 0) return "";
+    for (const headerRow of [...table.querySelectorAll("tr")]) {
+      if (headerRow === row || !headerRow.querySelector("th")) continue;
+      const cells = [...headerRow.children];
+      if (cells.length !== row.children.length) continue;
+      const text = normalize(cells[index]?.textContent);
+      if (text) return text;
+    }
+    return "";
+  };
+  const tableHeading = (element: Element) => {
+    const table = element.closest("table");
+    if (!table) return "";
+    for (let node = table.previousElementSibling; node; node = node.previousElementSibling) {
+      if (/^H[1-6]$/.test(node.tagName)) return normalize(node.textContent);
+    }
+    const heading = table.parentElement?.querySelector("h1, h2, h3, h4, legend");
+    return heading ? normalize(heading.textContent) : "";
+  };
+
   const questionText = (element: Element) => {
+    const row = rowLabel(element);
+    if (row) return normalize(`${tableHeading(element)} ${row}`);
     const group = groupFor(element);
     const heading = group?.querySelector("legend, h1, h2, h3, h4, [class*='prompt' i], [class*='questiontext' i], [class*='question-text' i]");
     return normalize(`${heading?.textContent ?? ""} ${group?.textContent ?? ""}`.slice(0, 1_500));
   };
   const labelText = (element: Element) => {
     const control = element as HTMLInputElement;
-    return normalize(`${control.labels?.[0]?.textContent ?? ""} ${element.getAttribute("aria-label") ?? ""} ${control.value ?? ""}`);
+    const own = normalize(`${control.labels?.[0]?.textContent ?? ""} ${element.getAttribute("aria-label") ?? ""} ${control.value ?? ""}`);
+    // Grid radios carry a zero-width label, so fall back to the column header.
+    return own || columnHeader(element);
   };
   const fieldText = (element: Element) => {
     const control = element as HTMLInputElement;
@@ -149,7 +404,7 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
     const choices = elements.map((element, index) => ({ element, index, text: labelText(element) }));
     if (answer.type === "boolean") return choices.find((choice) => answer.value ? /\byes\b/.test(choice.text) : /\bno\b/.test(choice.text))?.element ?? null;
     if (answer.type === "orderType") {
-      const patterns: Record<string, RegExp> = { dine_in: /dine in|eat in|inside/, takeaway: /takeaway|take out|carry out/, drive_thru: /drive thru|drive through/, delivery: /deliver/, other: /other/ };
+      const patterns: Record<string, RegExp> = { dine_in: /dine in|eat in|inside/, takeaway: /takeaway|take out|carry out|take away/, drive_thru: /drive thru|drive through/, delivery: /deliver/, other: /other/ };
       return choices.find((choice) => patterns[answer.value]?.test(choice.text))?.element ?? null;
     }
     const sentimentScore = (text: string) => {
@@ -170,9 +425,23 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
   };
 
   const bodyText = normalize(document.body?.innerText);
+  const rawBody = document.body?.innerText ?? "";
+  const heading = (document.querySelector("h1, h2, [class*='question' i]")?.textContent ?? document.title ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
   const securityChallenge = /captcha|verify you are human|security check|access denied|unusual traffic/.test(bodyText);
-  const completed = /thank you for (taking|completing)|survey (is )?complete|completed the survey|validation code|voucher code/.test(bodyText);
-  if (securityChallenge || completed) return { filled: 0, unknownRequired: 0, completed, securityChallenge, pageError: null, action: null };
+
+  // A finished survey has nothing left to answer. The entry page happily says
+  // "thank you for eating at McDonald's" and mentions a validation code, which
+  // is exactly how an untouched survey used to be read as finished.
+  const answerableControls = [...document.querySelectorAll("input:not([type='hidden']):not([type='submit']):not([type='button']):not([type='image']), select, textarea")].filter(visible);
+  const completionWording = /thank you for (taking|completing|participating|filling)|thank you for your (time|feedback|participation)|your (validation|voucher|reward|discount) code is|survey (has been|is) complete|you have completed (the|this) survey|we appreciate you taking/.test(bodyText);
+  const completionEvidence = completionWording && answerableControls.length === 0;
+  const completionCode = completionEvidence
+    ? (rawBody.match(/\b(?:validation|voucher|reward|discount)\s+code\D{0,20}([A-Z0-9][A-Z0-9-]{4,19})\b/i)?.[1] ?? null)
+    : null;
+
+  if (securityChallenge || completionEvidence) {
+    return { heading, filled: 0, unknownRequired: 0, completionEvidence, completionCode, securityChallenge, pageError: null, action: null, questions: [] };
+  }
 
   const pageError = [...document.querySelectorAll<Element>(".Error, [role='alert'], [aria-invalid='true']")]
     .filter(visible)
@@ -181,7 +450,9 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
     ?.slice(0, 240) ?? null;
 
   let filled = 0;
-  const code = payload.receipt.surveyCode.replace(/[^a-z0-9]/gi, "");
+  // UK Food for Thoughts codes are 12 alphanumeric characters (MKYW-ZM3N-L9VG),
+  // not 12 digits. Uppercase them; the entry boxes reject lowercase.
+  const code = payload.receipt.surveyCode.replace(/[^a-z0-9]/gi, "").toUpperCase();
   const setKnownInput = (selector: string, value: string) => {
     const input = document.querySelector<HTMLInputElement>(selector);
     if (!input || !visible(input) || input.value || !value) return;
@@ -205,7 +476,7 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
   const codeGroups = new Set<Element>();
   document.querySelectorAll("input:not([type='radio']):not([type='checkbox']):not([type='hidden']):not([type='button']):not([type='submit'])").forEach((input) => {
     const group = input.closest("fieldset, [role='group'], [class*='question' i], [id*='question' i]");
-    if (group && /survey code|invitation code|receipt code|participation code/.test(normalize(group.textContent))) codeGroups.add(group);
+    if (group && /survey code|invitation code|receipt code|participation code|digit code|character code/.test(normalize(group.textContent))) codeGroups.add(group);
   });
   codeGroups.forEach((group) => {
     const inputs = [...group.querySelectorAll<HTMLInputElement>("input:not([type='radio']):not([type='checkbox']):not([type='hidden']):not([type='button']):not([type='submit'])")].filter((input) => visible(input) && !input.value);
@@ -300,12 +571,69 @@ function fillSurveyPage(payload: SurveyAutomationPayload): PageState {
     }
   });
 
+  // A readable record of what this page actually asked, so the form structure
+  // can be reviewed after a practice run instead of guessed at.
+  const questions: SurveyQuestionRecord[] = [];
+  const seenPrompts = new Set<string>();
+  const shorten = (value: string) => value.replace(/\s+/g, " ").trim().slice(0, 180);
+  visibleRadioGroups.forEach((radios) => {
+    const row = rowLabel(radios[0]);
+    const prompt = row
+      ? shorten(`${tableHeading(radios[0])} — ${row}`)
+      : shorten(groupFor(radios[0])?.querySelector("legend, h1, h2, h3, h4")?.textContent ?? radios[0].name ?? "");
+    const checked = radios.find((radio) => radio.checked);
+    questions.push({
+      prompt: prompt || "(unlabelled choice)",
+      kind: "radio",
+      options: radios.map((radio) => shorten(labelText(radio))).slice(0, 12),
+      answered: Boolean(checked),
+      answer: checked ? shorten(labelText(checked)) : "",
+      required: true,
+    });
+  });
+  document.querySelectorAll<HTMLSelectElement>("select").forEach((select) => {
+    if (!visible(select)) return;
+    questions.push({
+      prompt: shorten(select.labels?.[0]?.textContent ?? select.name ?? select.id),
+      kind: "select",
+      options: [...select.options].map((option) => shorten(option.textContent ?? option.value)).slice(0, 12),
+      answered: Boolean(select.value),
+      answer: shorten(select.selectedOptions[0]?.textContent ?? ""),
+      required: select.required,
+    });
+  });
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input:not([type='radio']):not([type='checkbox']):not([type='hidden']):not([type='button']):not([type='submit']), textarea").forEach((element) => {
+    if (!visible(element)) return;
+    const prompt = shorten(element.labels?.[0]?.textContent ?? element.getAttribute("aria-label") ?? element.placeholder ?? element.name ?? element.id);
+    const key = `${prompt}|${element.name}`;
+    if (seenPrompts.has(key)) return;
+    seenPrompts.add(key);
+    questions.push({
+      prompt: prompt || "(unlabelled field)",
+      kind: element instanceof HTMLTextAreaElement ? "textarea" : "text",
+      options: [],
+      answered: Boolean(element.value.trim()),
+      answer: shorten(element.value).slice(0, 60),
+      required: element.required,
+    });
+  });
+
   const controls = [...document.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLAnchorElement>("button, input[type='button'], input[type='submit'], input[type='image'], a[role='button']")].filter(visible);
   const controlLabel = (control: HTMLInputElement | HTMLButtonElement | HTMLAnchorElement) => normalize(`${control.textContent ?? ""} ${(control as HTMLInputElement).value ?? ""} ${control.getAttribute("aria-label") ?? ""}`);
   const final = controls.find((control) => /^(submit|finish|send feedback|complete survey|done)(\s|$)/.test(controlLabel(control)));
   const next = controls.find((control) => /^(next|continue|start|begin)(\s|$)/.test(controlLabel(control)));
   const target = final ?? next;
-  return { filled, unknownRequired, completed: false, securityChallenge: false, pageError, action: target ? { kind: final ? "submit" : "next", label: controlLabel(target) } : null };
+  return {
+    heading,
+    filled,
+    unknownRequired,
+    completionEvidence: false,
+    completionCode: null,
+    securityChallenge: false,
+    pageError,
+    action: target ? { kind: final ? "submit" : "next", label: controlLabel(target) } : null,
+    questions,
+  };
 }
 
 function clickSurveyAction(action: { kind: "next" | "submit"; label: string }) {

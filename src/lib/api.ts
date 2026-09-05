@@ -1,4 +1,4 @@
-import type { AutomationJob, Employee, Experience, Health, Receipt, SurveyPreparation } from "../types";
+import type { AutomationJob, CredentialVerification, Employee, Experience, Health, ProviderSettings, Receipt, SurveyPreparation } from "../types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
@@ -31,7 +31,12 @@ export const api = {
   approve: (id: string) => request<{ receipt: Receipt; preparation: SurveyPreparation }>(`/api/receipts/${id}/approve`, { method: "POST" }),
   schedule: (id: string, scheduledAt: string) => request<{ receipt: Receipt }>(`/api/receipts/${id}/schedule`, json("POST", { scheduledAt })),
   complete: (id: string) => request<{ receipt: Receipt }>(`/api/receipts/${id}/complete`, { method: "POST" }),
-  automation: (id: string) => request<{ job: AutomationJob }>(`/api/receipts/${id}/automation`, { method: "POST" }),
+  automation: (id: string, dryRun = false) => request<{ job: AutomationJob }>(`/api/receipts/${id}/automation`, json("POST", { dryRun })),
+  providerSettings: () => request<ProviderSettings>("/api/settings/providers"),
+  saveCredential: (body: { providerId: string; token: string; model: string; baseUrl: string }) =>
+    request<CredentialVerification>("/api/settings/credential", json("PUT", body)),
+  clearCredential: () => request<void>("/api/settings/credential", { method: "DELETE" }),
+  saveAutomationPreferences: (showBrowser: boolean) => request<{ showBrowser: boolean }>("/api/settings/automation", json("PUT", { showBrowser })),
   automationJob: (id: string) => request<{ job: AutomationJob }>(`/api/automation/jobs/${id}`),
   latestAutomation: (receiptId: string) => request<{ job: AutomationJob | null }>(`/api/receipts/${receiptId}/automation/latest`),
   cancel: (id: string) => request<{ receipt: Receipt }>(`/api/receipts/${id}/cancel`, { method: "POST" }),
@@ -49,3 +54,5 @@ let resolveImage: ImageResolver = (receiptId, imageId) => `/api/receipts/${recei
 export const setImageResolver = (resolver: ImageResolver) => { resolveImage = resolver; };
 
 export const imageUrl: ImageResolver = (receiptId, imageId) => resolveImage(receiptId, imageId);
+
+export const proofUrl = (jobId: string, fileName: string) => `/api/automation/jobs/${jobId}/proof/${encodeURIComponent(fileName)}`;

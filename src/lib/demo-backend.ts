@@ -75,7 +75,7 @@ function seedReceipt(store: string, code: string, status: Receipt["status"], min
     total,
     confidence: 0.94,
     items: items(lines),
-    images: [makeImage(receiptId, receiptSvg(store, code.replace(/(\d{4})(?=\d)/g, "$1-"), lines.map(([name, price]) => [name, money(price)]), money(total)))],
+    images: [makeImage(receiptId, receiptSvg(store, code.replace(/([A-Z0-9]{4})(?=[A-Z0-9])/g, "$1-"), lines.map(([name, price]) => [name, money(price)]), money(total)))],
     experience: emptyExperience(),
     feedback: "",
     scheduledAt: null,
@@ -86,8 +86,8 @@ function seedReceipt(store: string, code: string, status: Receipt["status"], min
 }
 
 const receipts: Receipt[] = [
-  seedReceipt("Sunset Grill", "873215432198", "completed", 40, [["Big Mac Meal", 7.49, 0.96], ["Apple Pie", 2.51, 0.9]], 10),
-  seedReceipt("Harbor Bistro", "441908772140", "ready_for_confirmation", 1_500, [["Quarter Pounder", 6.29, 0.94], ["Fries", 1.79, 0.97], ["Latte", 2.2, 0.88]], 10.28),
+  seedReceipt("Sunset Grill", "MKYWZM3NL9VG", "completed", 40, [["Big Mac Meal", 7.49, 0.96], ["Apple Pie", 2.51, 0.9]], 10),
+  seedReceipt("Harbor Bistro", "QJ4CTB7XR2HD", "ready_for_confirmation", 1_500, [["Quarter Pounder", 6.29, 0.94], ["Fries", 1.79, 0.97], ["Latte", 2.2, 0.88]], 10.28),
   seedReceipt("Pine & Coast Cafe", "", "quality_review", 3_100, [], 0),
 ];
 receipts[2].confidence = 0.42;
@@ -102,32 +102,9 @@ const employees: Employee[] = [
 ];
 
 const jobs = new Map<string, AutomationJob>();
-const jobStages: Array<[number, string]> = [
-  [12, "Opening the official survey in a private background browser"],
-  [34, "Entering the 12-digit receipt code and purchase amount"],
-  [58, "Answering the confirmed satisfaction questions"],
-  [82, "Reviewing every required field before submitting"],
-  [100, "Survey completed successfully. Your validation code is on the final page."],
-];
 
 const find = (receiptId: string) => receipts.find((receipt) => receipt.id === receiptId);
 const sorted = () => [...receipts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-function analyze(receipt: Receipt): Receipt {
-  receipt.store = "High Street Restaurant";
-  receipt.visitedAt = minutesAgo(45);
-  receipt.orderNumber = "87321";
-  receipt.surveyCode = "123456789012";
-  receipt.total = 10;
-  receipt.subtotal = 8.33;
-  receipt.tax = 1.67;
-  receipt.confidence = 0.93;
-  receipt.items = items([["Big Mac Meal", 7.49, 0.96], ["Apple Pie", 2.51, 0.9]]);
-  receipt.classification = { isReceipt: true, confidence: 0.96, reason: "A printed merchant document with line items and totals is visible.", evidence: ["merchant heading", "line items", "transaction total"] };
-  receipt.status = "ready_for_confirmation";
-  receipt.updatedAt = now();
-  return receipt;
-}
 
 function draftFeedback(receipt: Receipt, experience: Experience): string {
   const claims = [`I rated my visit to ${receipt.store || "this restaurant"} ${experience.satisfaction} out of 5.`];
@@ -145,7 +122,12 @@ async function handle(pathname: string, method: string, request: Request): Promi
   const body = async <T>(): Promise<T> => request.body ? (await request.json()) as T : ({} as T);
 
   if (pathname === "/api/health") {
-    return ok({ ok: true, aiProvider: "Interface preview", analysisEnabled: true, surveyAutomator: "Interface preview", automationEnabled: true, maxUploadMb: 10, maxImages: 3 });
+    return ok({
+      ok: true, aiProvider: "Interface preview", aiModel: "none", aiSource: "none",
+      analysisEnabled: false, feedbackEnabled: false, visionSupported: false,
+      surveyAutomator: "Interface preview", automationEnabled: false, showBrowser: false,
+      maxUploadMb: 10, maxImages: 3,
+    });
   }
 
   if (segments[0] === "employees") {
@@ -162,17 +144,6 @@ async function handle(pathname: string, method: string, request: Request): Promi
   if (segments[0] === "automation" && segments[1] === "jobs") {
     const job = jobs.get(segments[2]);
     if (!job) return fail(404, "Job not found");
-    const stage = Math.min(jobStages.findIndex(([progress]) => progress > job.progress), jobStages.length - 1);
-    const [progress, message] = jobStages[stage < 0 ? jobStages.length - 1 : stage];
-    job.progress = progress;
-    job.message = message;
-    job.status = progress >= 100 ? "completed" : "running";
-    job.updatedAt = now();
-    if (job.status === "completed") {
-      job.completedAt = now();
-      const receipt = find(job.receiptId);
-      if (receipt) { receipt.status = "completed"; receipt.updatedAt = now(); }
-    }
     return ok({ job });
   }
 
@@ -214,7 +185,18 @@ async function handle(pathname: string, method: string, request: Request): Promi
     return ok({ receipt });
   }
 
-  if (action === "analyze") return ok({ receipt: analyze(receipt) });
+  if (action === "analyze") {
+    // The preview has no Claude, no server, and no OCR. Inventing an extraction
+    // here is what made an unrelated photo look like a recognised receipt.
+    if (!receipt.store) {
+      receipt.status = "needs_attention";
+      receipt.classification = null;
+      receipt.failureReason = "The interface preview cannot read receipts. Run Receipt Relay locally and connect a model in Settings to analyse a real photo.";
+      receipt.updatedAt = now();
+      return ok({ receipt });
+    }
+    return ok({ receipt });
+  }
 
   if (action === "feedback") {
     const experience = await body<Experience>();
@@ -238,13 +220,15 @@ async function handle(pathname: string, method: string, request: Request): Promi
       const latest = [...jobs.values()].filter((job) => job.receiptId === receipt.id).at(-1) ?? null;
       return ok({ job: latest });
     }
+    // No browser exists in a static preview, so the job reports that instead of
+    // pretending a survey was completed.
     const job: AutomationJob = {
-      id: id(), receiptId: receipt.id, status: "queued", progress: 4,
-      message: "Survey queued. The background browser starts in a moment.",
-      createdAt: now(), updatedAt: now(), startedAt: now(), completedAt: null,
+      id: id(), receiptId: receipt.id, status: "needs_attention", progress: 0,
+      message: "The interface preview has no background browser. Run Receipt Relay locally to complete a real survey.",
+      createdAt: now(), updatedAt: now(), startedAt: now(), completedAt: now(),
+      dryRun: false, proof: null, transcript: [],
     };
     jobs.set(job.id, job);
-    receipt.status = "scheduled";
     return ok({ job });
   }
 
@@ -272,7 +256,7 @@ function banner() {
   const node = document.createElement("div");
   node.className = "preview-banner";
   node.setAttribute("role", "status");
-  node.innerHTML = "<i></i><span>Interface preview — sample data, no real receipt analysis</span>";
+  node.innerHTML = "<i></i><span>Interface preview — layout only. No receipt analysis and no survey submission.</span>";
   document.body.append(node);
 }
 

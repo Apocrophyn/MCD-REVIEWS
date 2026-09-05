@@ -72,3 +72,22 @@ test("runs the survey in the background without leaving Receipt Relay", async ({
   await page.getByRole("button", { name: /Delete receipt and images/ }).click();
   await expect(page.getByRole("heading", { name: "Turn a receipt into useful feedback." })).toBeVisible();
 });
+
+test("a practice run stops before submitting and leaves the receipt ready", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("gallery-input").setInputFiles(fixturePath);
+  await page.getByRole("button", { name: "Classify & read receipt" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm receipt" })).toBeVisible();
+  await page.getByRole("button", { name: "Service", exact: true }).click();
+  await page.getByLabel("What happened?").fill("The counter team welcomed me.");
+  await page.getByRole("checkbox", { name: /Run the official survey for me/ }).check();
+  await page.getByRole("button", { name: /Practice run/ }).click();
+  await expect(page.getByRole("heading", { name: "Practice run finished" })).toBeVisible();
+  await expect(page.getByText(/Nothing was submitted|stopped before submitting/i)).toBeVisible();
+  // The real submission is still available afterwards.
+  await expect(page.getByRole("button", { name: /Approve & run/ })).toBeVisible();
+  await expect(page.locator(".completed-action")).toHaveCount(0);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: /Delete receipt and images/ }).click();
+  await expect(page.getByRole("heading", { name: "Turn a receipt into useful feedback." })).toBeVisible();
+});

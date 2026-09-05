@@ -109,6 +109,31 @@ export interface AutomationJob {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  /** A practice run fills every page but never submits. */
+  dryRun: boolean;
+  /** Screenshot file name of the final page: the user's proof of submission. */
+  proof: string | null;
+  /** What each survey page actually asked, recorded as the run went. */
+  transcript: SurveyPageSummary[];
+}
+
+export interface SurveyPageSummary {
+  index: number;
+  url: string;
+  heading: string;
+  filled: number;
+  unansweredRequired: number;
+  action: string | null;
+  actionKind: "next" | "submit" | null;
+  screenshot: string | null;
+  questions: Array<{
+    prompt: string;
+    kind: "text" | "radio" | "checkbox" | "select" | "textarea";
+    options: string[];
+    answered: boolean;
+    answer: string;
+    required: boolean;
+  }>;
 }
 
 export interface ReceiptImage {

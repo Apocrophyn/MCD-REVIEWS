@@ -26,7 +26,8 @@ export function QualityScreen({ receipt, busy, analysisEnabled, onBack, onAnalyz
         {rejected || unavailable || analysisFailed ? <div className="receipt-rejection" role="alert">
           <IconWell><AlertTriangle /></IconWell>
           <h2>{rejected ? "This doesn’t look like a receipt" : unavailable ? "Receipt recognition isn’t available" : "Receipt analysis couldn’t finish"}</h2>
-          <p>{receipt.failureReason || "Set ANTHROPIC_API_KEY on the server to classify real images. Receipt Relay no longer substitutes hardcoded sample data."}</p>
+          <p>{receipt.failureReason || "Connect a vision-capable model in Settings to classify real images. Receipt Relay never substitutes sample receipt data."}</p>
+          {rejected && receipt.classification?.reason ? <small className="rejection-detail">Nothing was extracted, so no survey can be started from this image.</small> : null}
           {receipt.classification?.evidence.length ? <ul>{receipt.classification.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}</ul> : null}
         </div> : <div className="check-list">{checks.map(([label, detail, passed]) => <div className="check-row" key={label}>
           <span className={passed ? "check-pass" : "check-fail"}>{passed ? <Check /> : <X />}</span><strong>{label}</strong><small>{detail}</small>
