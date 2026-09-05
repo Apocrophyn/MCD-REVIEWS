@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T02:05:49.223Z",
+  "title": "Design System: Receipt Relay",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.00744 118.33)",
+          "oklch(26.43% 0.00744 118.33)",
+          "oklch(37.86% 0.00744 118.33)",
+          "oklch(49.29% 0.00744 118.33)",
+          "oklch(60.71% 0.00744 118.33)",
+          "oklch(72.14% 0.00744 118.33)",
+          "oklch(83.57% 0.00744 118.33)",
+          "oklch(95.00% 0.00744 118.33)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.01229 112.59)",
+          "oklch(26.43% 0.01229 112.59)",
+          "oklch(37.86% 0.01229 112.59)",
+          "oklch(49.29% 0.01229 112.59)",
+          "oklch(60.71% 0.01229 112.59)",
+          "oklch(72.14% 0.01229 112.59)",
+          "oklch(83.57% 0.01229 112.59)",
+          "oklch(95.00% 0.01229 112.59)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Paper Line",
+        "tonalRamp": [
+          "oklch(15.00% 0.01081 100.84)",
+          "oklch(26.43% 0.01081 100.84)",
+          "oklch(37.86% 0.01081 100.84)",
+          "oklch(49.29% 0.01081 100.84)",
+          "oklch(60.71% 0.01081 100.84)",
+          "oklch(72.14% 0.01081 100.84)",
+          "oklch(83.57% 0.01081 100.84)",
+          "oklch(95.00% 0.01081 100.84)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.00698 88.64)",
+          "oklch(26.43% 0.00698 88.64)",
+          "oklch(37.86% 0.00698 88.64)",
+          "oklch(49.29% 0.00698 88.64)",
+          "oklch(60.71% 0.00698 88.64)",
+          "oklch(72.14% 0.00698 88.64)",
+          "oklch(83.57% 0.00698 88.64)",
+          "oklch(95.00% 0.00698 88.64)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Clean Paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.00537 95.10)",
+          "oklch(26.43% 0.00537 95.10)",
+          "oklch(37.86% 0.00537 95.10)",
+          "oklch(49.29% 0.00537 95.10)",
+          "oklch(60.71% 0.00537 95.10)",
+          "oklch(72.14% 0.00537 95.10)",
+          "oklch(83.57% 0.00537 95.10)",
+          "oklch(95.00% 0.00537 95.10)"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "Soft Paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.00930 106.58)",
+          "oklch(26.43% 0.00930 106.58)",
+          "oklch(37.86% 0.00930 106.58)",
+          "oklch(49.29% 0.00930 106.58)",
+          "oklch(60.71% 0.00930 106.58)",
+          "oklch(72.14% 0.00930 106.58)",
+          "oklch(83.57% 0.00930 106.58)",
+          "oklch(95.00% 0.00930 106.58)"
+        ]
+      },
+      "charcoal": {
+        "role": "neutral",
+        "displayName": "Charcoal",
+        "tonalRamp": [
+          "oklch(15.00% 0.00861 137.82)",
+          "oklch(26.43% 0.00861 137.82)",
+          "oklch(37.86% 0.00861 137.82)",
+          "oklch(49.29% 0.00861 137.82)",
+          "oklch(60.71% 0.00861 137.82)",
+          "oklch(72.14% 0.00861 137.82)",
+          "oklch(83.57% 0.00861 137.82)",
+          "oklch(95.00% 0.00861 137.82)"
+        ]
+      },
+      "icon-well": {
+        "role": "neutral",
+        "displayName": "Black Glass",
+        "tonalRamp": [
+          "oklch(15.00% 0.00850 137.82)",
+          "oklch(26.43% 0.00850 137.82)",
+          "oklch(37.86% 0.00850 137.82)",
+          "oklch(49.29% 0.00850 137.82)",
+          "oklch(60.71% 0.00850 137.82)",
+          "oklch(72.14% 0.00850 137.82)",
+          "oklch(83.57% 0.00850 137.82)",
+          "oklch(95.00% 0.00850 137.82)"
+        ]
+      },
+      "red": {
+        "role": "primary",
+        "displayName": "Receipt Red",
+        "tonalRamp": [
+          "oklch(15.00% 0.17561 30.97)",
+          "oklch(26.43% 0.17561 30.97)",
+          "oklch(37.86% 0.17561 30.97)",
+          "oklch(49.29% 0.17561 30.97)",
+          "oklch(60.71% 0.17561 30.97)",
+          "oklch(72.14% 0.17561 30.97)",
+          "oklch(83.57% 0.17561 30.97)",
+          "oklch(95.00% 0.17561 30.97)"
+        ]
+      },
+      "red-dark": {
+        "role": "primary",
+        "displayName": "Deep Receipt Red",
+        "tonalRamp": [
+          "oklch(15.00% 0.16119 31.07)",
+          "oklch(26.43% 0.16119 31.07)",
+          "oklch(37.86% 0.16119 31.07)",
+          "oklch(49.29% 0.16119 31.07)",
+          "oklch(60.71% 0.16119 31.07)",
+          "oklch(72.14% 0.16119 31.07)",
+          "oklch(83.57% 0.16119 31.07)",
+          "oklch(95.00% 0.16119 31.07)"
+        ]
+      },
+      "red-soft": {
+        "role": "primary",
+        "displayName": "Red Wash",
+        "tonalRamp": [
+          "oklch(15.00% 0.01769 39.40)",
+          "oklch(26.43% 0.01769 39.40)",
+          "oklch(37.86% 0.01769 39.40)",
+          "oklch(49.29% 0.01769 39.40)",
+          "oklch(60.71% 0.01769 39.40)",
+          "oklch(72.14% 0.01769 39.40)",
+          "oklch(83.57% 0.01769 39.40)",
+          "oklch(95.00% 0.01769 39.40)"
+        ]
+      },
+      "green": {
+        "role": "semantic",
+        "displayName": "Completion Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.07143 157.57)",
+          "oklch(26.43% 0.07143 157.57)",
+          "oklch(37.86% 0.07143 157.57)",
+          "oklch(49.29% 0.07143 157.57)",
+          "oklch(60.71% 0.07143 157.57)",
+          "oklch(72.14% 0.07143 157.57)",
+          "oklch(83.57% 0.07143 157.57)",
+          "oklch(95.00% 0.07143 157.57)"
+        ]
+      },
+      "green-soft": {
+        "role": "semantic",
+        "displayName": "Completion Wash",
+        "tonalRamp": [
+          "oklch(15.00% 0.01185 145.48)",
+          "oklch(26.43% 0.01185 145.48)",
+          "oklch(37.86% 0.01185 145.48)",
+          "oklch(49.29% 0.01185 145.48)",
+          "oklch(60.71% 0.01185 145.48)",
+          "oklch(72.14% 0.01185 145.48)",
+          "oklch(83.57% 0.01185 145.48)",
+          "oklch(95.00% 0.01185 145.48)"
+        ]
+      },
+      "blue": {
+        "role": "semantic",
+        "displayName": "Information Blue",
+        "tonalRamp": [
+          "oklch(15.00% 0.04327 238.01)",
+          "oklch(26.43% 0.04327 238.01)",
+          "oklch(37.86% 0.04327 238.01)",
+          "oklch(49.29% 0.04327 238.01)",
+          "oklch(60.71% 0.04327 238.01)",
+          "oklch(72.14% 0.04327 238.01)",
+          "oklch(83.57% 0.04327 238.01)",
+          "oklch(95.00% 0.04327 238.01)"
+        ]
+      },
+      "blue-soft": {
+        "role": "semantic",
+        "displayName": "Information Wash",
+        "tonalRamp": [
+          "oklch(15.00% 0.00670 233.64)",
+          "oklch(26.43% 0.00670 233.64)",
+          "oklch(37.86% 0.00670 233.64)",
+          "oklch(49.29% 0.00670 233.64)",
+          "oklch(60.71% 0.00670 233.64)",
+          "oklch(72.14% 0.00670 233.64)",
+          "oklch(83.57% 0.00670 233.64)",
+          "oklch(95.00% 0.00670 233.64)"
+        ]
+      },
+      "amber": {
+        "role": "semantic",
+        "displayName": "Concern Amber",
+        "tonalRamp": [
+          "oklch(15.00% 0.08668 75.64)",
+          "oklch(26.43% 0.08668 75.64)",
+          "oklch(37.86% 0.08668 75.64)",
+          "oklch(49.29% 0.08668 75.64)",
+          "oklch(60.71% 0.08668 75.64)",
+          "oklch(72.14% 0.08668 75.64)",
+          "oklch(83.57% 0.08668 75.64)",
+          "oklch(95.00% 0.08668 75.64)"
+        ]
+      },
+      "amber-soft": {
+        "role": "semantic",
+        "displayName": "Concern Wash",
+        "tonalRamp": [
+          "oklch(15.00% 0.02492 89.21)",
+          "oklch(26.43% 0.02492 89.21)",
+          "oklch(37.86% 0.02492 89.21)",
+          "oklch(49.29% 0.02492 89.21)",
+          "oklch(60.71% 0.02492 89.21)",
+          "oklch(72.14% 0.02492 89.21)",
+          "oklch(83.57% 0.02492 89.21)",
+          "oklch(95.00% 0.02492 89.21)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Home task heading",
+        "purpose": "Responsive Home heading; mobile sizes are documented in DESIGN.md."
+      },
+      "headline": {
+        "displayName": "Page heading",
+        "purpose": "Queue, History, and Settings."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Repeated sections and working panels."
+      },
+      "body": {
+        "displayName": "Introductory body",
+        "purpose": "Page descriptions; working text is compact."
+      },
+      "label": {
+        "displayName": "Field label",
+        "purpose": "Field labels and low-emphasis text actions."
+      },
+      "button": {
+        "displayName": "Button label",
+        "purpose": "Primary and secondary task actions."
+      }
+    },
+    "shadows": [
+      {
+        "name": "icon-well",
+        "value": "inset 0 1px 1px #ffffff36, inset 0 -3px 5px #00000080, 0 3px 5px #17191616",
+        "purpose": "Repeated static black glass well."
+      },
+      {
+        "name": "camera-well",
+        "value": "inset 0 2px 2px #ffffff38, inset 0 -5px 8px #00000090, 0 8px 13px #1b201b20",
+        "purpose": "Larger camera capture well."
+      },
+      {
+        "name": "toast",
+        "value": "0 8px 22px #00000020",
+        "purpose": "Transient feedback above page content."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-feedback",
+        "value": "background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out",
+        "purpose": "Button, link, and field state changes."
+      },
+      {
+        "name": "press",
+        "value": "translateY(1px)",
+        "purpose": "Enabled primary and secondary button active feedback."
+      },
+      {
+        "name": "progress",
+        "value": "transform 300ms ease-out",
+        "purpose": "Automation progress."
+      },
+      {
+        "name": "toast-entry",
+        "value": "180ms ease-out",
+        "purpose": "Opacity and translateY(5px) entry."
+      },
+      {
+        "name": "working-spinner",
+        "value": "900ms linear infinite",
+        "purpose": "In-progress indicator."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none !important; transition: none !important; scroll-behavior: auto !important",
+        "purpose": "Global prefers-reduced-motion override."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-max",
+        "value": "370px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "760px"
+      },
+      {
+        "name": "stacked-max",
+        "value": "1000px"
+      },
+      {
+        "name": "two-column-editor-max",
+        "value": "1250px"
+      },
+      {
+        "name": "four-column-editor-min",
+        "value": "1650px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Explicit task action with red hover and pressed feedback.",
+      "html": "<button class=\"ds-primary\">Save receipt</button>",
+      "css": ".ds-primary{min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:11px 17px;border:1px solid transparent;border-radius:9px;font:600 12px/1.55 'Sora Variable',sans-serif;text-decoration:none;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out;background:var(--red);color:#fff}.ds-primary:hover:not(:disabled){background:var(--red-dark)}.ds-primary:active:not(:disabled){transform:translateY(1px)}.ds-primary:focus-visible{outline:3px solid var(--red);outline-offset:4px}.ds-primary:disabled{opacity:.5;cursor:not-allowed}@media(max-width:760px){.ds-primary{min-height:50px}}@media(prefers-reduced-motion:reduce){button,a,input{transition:none!important;animation:none!important}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Paper alternative action with a quiet border.",
+      "html": "<button class=\"ds-secondary\">Retake photo</button>",
+      "css": ".ds-secondary{min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:11px 17px;border:1px solid transparent;border-radius:9px;font:600 12px/1.55 'Sora Variable',sans-serif;text-decoration:none;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out;background:var(--surface);color:var(--ink);border-color:#d1d3c6}.ds-secondary:hover:not(:disabled){background:var(--soft);border-color:#92998a}.ds-secondary:active:not(:disabled){transform:translateY(1px)}.ds-secondary:focus-visible{outline:3px solid var(--red);outline-offset:4px}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}@media(max-width:760px){.ds-secondary{min-height:50px}}@media(prefers-reduced-motion:reduce){button,a,input{transition:none!important;animation:none!important}}"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Low-emphasis red action.",
+      "html": "<button class=\"ds-text\">Add item</button>",
+      "css": ".ds-text{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0;border:0;background:transparent;color:var(--red);font:550 11px 'Sora Variable',sans-serif;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out;}.ds-text:hover{color:var(--red-dark);text-decoration:underline}.ds-text:focus-visible{outline:3px solid var(--red);outline-offset:4px}@media(prefers-reduced-motion:reduce){button,a,input{transition:none!important;animation:none!important}}"
+    },
+    {
+      "name": "Back Button",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "Circular paper control for focused workflow navigation.",
+      "html": "<button class=\"ds-back\" aria-label=\"Back\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><path d=\"m12 19-7-7 7-7M5 12h14\"/></svg></button>",
+      "css": ".ds-back{width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out;}.ds-back:hover{background:var(--soft)}.ds-back:focus-visible{outline:3px solid var(--red);outline-offset:4px}@media(prefers-reduced-motion:reduce){button,a,input{transition:none!important;animation:none!important}}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standalone field; phone type increases for readable entry.",
+      "html": "<label class=\"ds-label\" for=\"ds-note\">Notes</label><input class=\"ds-input\" id=\"ds-note\" placeholder=\"Add details\" />",
+      "css": ".ds-label{display:block;margin-bottom:7px;color:var(--muted);font:550 11px 'Sora Variable',sans-serif}.ds-input{width:100%;min-height:44px;padding:12px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--surface);font:400 12px/1.75 'Sora Variable',sans-serif;caret-color:var(--red);transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out;}.ds-input::placeholder{color:var(--muted);opacity:1}.ds-input:focus-visible{outline:3px solid var(--red);outline-offset:4px}.ds-input[aria-invalid=\"true\"]{outline:2px solid var(--red);outline-offset:-2px;background:var(--red-soft)}@media(max-width:760px){.ds-input{font-size:16px}}@media(prefers-reduced-motion:reduce){button,a,input{transition:none!important;animation:none!important}}"
+    },
+    {
+      "name": "Desktop Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Paper active destination against charcoal; compact static icon wells.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Example navigation\"><button class=\"ds-nav-item\" aria-current=\"page\"><span class=\"ds-nav-well\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/><path d=\"M9 21v-8h6v8\"/></svg></span><span>Home</span></button></nav>",
+      "css": ".ds-nav{padding:16px;background:#20231f}.ds-nav-item{width:100%;min-height:54px;display:flex;align-items:center;gap:12px;border:0;border-radius:12px;padding:8px 12px;background:transparent;color:#bfc2b8;font:500 12px 'Sora Variable',sans-serif;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out;}.ds-nav-item:hover{color:#fff;background:#2c302a}.ds-nav-item[aria-current=\"page\"]{color:var(--ink);background:var(--paper);font-weight:650}.ds-nav-item:focus-visible{outline:3px solid var(--red);outline-offset:4px}.ds-nav-well{width:32px;height:32px;display:inline-grid;place-items:center;border-radius:50%;background:#191c18;color:#fff;box-shadow:var(--icon-shadow)}@media(prefers-reduced-motion:reduce){button,a,input{transition:none!important;animation:none!important}}"
+    },
+    {
+      "name": "Completed Status",
+      "kind": "chip",
+      "refersTo": "status-completed",
+      "description": "Text-backed status indicator; passive rather than interactive.",
+      "html": "<span class=\"ds-status\">Completed</span>",
+      "css": ".ds-status{display:inline-block;color:var(--green);background:var(--green-soft);border-radius:5px;padding:4px 7px;font:400 9px/1.2 'Sora Variable',sans-serif}"
+    },
+    {
+      "name": "Working Panel",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Opaque surface for grouped receipt fields.",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-panel-title\">Receipt details</h2><div class=\"ds-panel-row\">Review the information below.</div></section>",
+      "css": ".ds-panel{padding:20px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--radius);font-family:'Sora Variable',sans-serif}.ds-panel-title{margin:0 0 18px;font-size:14px;font-weight:600;letter-spacing:-.02em}.ds-panel-row{padding:13px 0;border-top:1px solid var(--line);color:var(--muted);font-size:11px;line-height:1.8}@media(max-width:760px){.ds-panel{padding:19px 17px}.ds-panel-title{font-size:15px}}"
+    },
+    {
+      "name": "Black Glass Icon Well",
+      "kind": "custom",
+      "refersTo": "icon-well",
+      "description": "Opaque circular icon housing with static inset highlights.",
+      "html": "<span class=\"ds-well\" aria-hidden=\"true\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/><path d=\"M9 21v-8h6v8\"/></svg></span>",
+      "css": ".ds-well{width:38px;height:38px;display:inline-grid;place-items:center;flex:0 0 auto;border-radius:50%;background:#232622;color:#f8f8f0;box-shadow:var(--icon-shadow)}.ds-well svg{width:18px;height:18px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The readable receipt desk",
+    "overview": "Warm paper surfaces, deep charcoal structure, and restrained red actions support a focused receipt workflow. Locally bundled Sora and circular black glass icon wells give the interface its identity. The glass character comes from opaque surfaces and static inset highlights.\n\nThis record describes the built React interface in `src/styles/app.css` and `src/components/`, with the local font import in `src/main.tsx`. The user-confirmed direction contract in `index.html` overrides concept seed `8b030ba4`; the older concept PNG is evidence only. The app retains capture, photo quality review, receipt confirmation, Queue, History, and Settings.",
+    "keyCharacteristics": [
+      "Warm paper and charcoal structure with red task actions.",
+      "One variable font, compact operational text, and larger task headings.",
+      "Circular black icon wells with static highlights.",
+      "Responsive forms, visible focus, and explicit action states."
+    ],
+    "rules": [
+      {
+        "name": "The State Has Meaning Rule",
+        "body": "Use semantic tones for the state they name; red remains the action accent and the attention/error family.",
+        "section": "colors"
+      },
+      {
+        "name": "The Local Type Rule",
+        "body": "Use the bundled variable Sora family throughout the interface and preserve the distinction between task headings, working text, and supporting metadata.",
+        "section": "typography"
+      },
+      {
+        "name": "The Content Before Columns Rule",
+        "body": "Collapse the editor before its form controls lose usable width; keep the action section in the same reading order when it moves.",
+        "section": "layout"
+      },
+      {
+        "name": "The Static Glass Rule",
+        "body": "Build icon depth with opaque fill and static inset highlights. Do not introduce blur, backdrop filters, or gradients.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use warm paper for the workspace and charcoal for desktop navigation.",
+      "Do retain local Sora, the three-bar brand symbol, and circular black icon wells.",
+      "Do pair semantic status colors with explicit text or icons.",
+      "Do collapse the editor according to available content width and preserve visible focus.",
+      "Do honor reduced motion and mobile safe-area insets.",
+      "Do show actual receipt data and counts that match the displayed view."
+    ],
+    "donts": [
+      "Don't use blur, backdrop filters, or gradients.",
+      "Don't turn static icon highlights into glass effects that sample the page behind them.",
+      "Don't replace explicit approval, consent, or error states with decorative feedback.",
+      "Don't treat browser-only synthetic receipt fixtures or the prior concept PNG as approved shipping content.",
+      "Don't promote unusually small metadata into the default reading or form-label scale."
+    ]
+  }
+}

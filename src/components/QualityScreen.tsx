@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowLeft, Check, RotateCcw, ScanLine, Sparkles, X } from "lucide-react";
 import { imageUrl } from "../lib/api";
 import type { Receipt } from "../types";
+import { IconWell } from "./IconWell";
 
 interface Props { receipt: Receipt; busy: boolean; analysisEnabled: boolean; onBack: () => void; onAnalyze: () => void; onRetake: () => void }
 
@@ -23,7 +24,7 @@ export function QualityScreen({ receipt, busy, analysisEnabled, onBack, onAnalyz
       </section>
       <section className="quality-actions">
         {rejected || unavailable || analysisFailed ? <div className="receipt-rejection" role="alert">
-          <span><AlertTriangle /></span>
+          <IconWell><AlertTriangle /></IconWell>
           <h2>{rejected ? "This doesn’t look like a receipt" : unavailable ? "Receipt recognition isn’t available" : "Receipt analysis couldn’t finish"}</h2>
           <p>{receipt.failureReason || "Set ANTHROPIC_API_KEY on the server to classify real images. Receipt Relay no longer substitutes hardcoded sample data."}</p>
           {receipt.classification?.evidence.length ? <ul>{receipt.classification.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}</ul> : null}

@@ -1,5 +1,6 @@
 import { Bot, Check, Database, ExternalLink, HardDrive, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import type { Health } from "../types";
+import { IconWell } from "./IconWell";
 
 export function SettingsScreen({ health }: { health: Health | null }) {
   return <div className="page settings-page">
@@ -21,5 +22,5 @@ export function SettingsScreen({ health }: { health: Health | null }) {
 }
 
 function SettingRow({ icon, title, value, detail }: { icon: React.ReactNode; title: string; value: string; detail: string }) {
-  return <div className="setting-row"><span>{icon}</span><div><strong>{title}</strong><small>{detail}</small></div><em>{value}</em></div>;
+  return <div className="setting-row"><IconWell>{icon}</IconWell><div><strong>{title}</strong><small>{detail}</small></div><em>{value}</em></div>;
 }

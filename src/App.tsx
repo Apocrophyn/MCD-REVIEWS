@@ -75,7 +75,7 @@ export default function App() {
     setView(next);
     setHistoryOnly(history);
     if (next === "home" || next === "queue" || next === "settings") setActiveReceipt(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
 
   const openReceipt = (receipt: Receipt) => {
@@ -84,7 +84,7 @@ export default function App() {
     if (!automationJob || !["queued", "running"].includes(automationJob.status)) {
       void api.latestAutomation(receipt.id).then(({ job }) => setAutomationJob(job)).catch(() => undefined);
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
 
   const upload = (files: File[]) => void run(async () => {
@@ -174,7 +174,7 @@ export default function App() {
 
   const queueCount = receipts.filter((receipt) => !["completed", "canceled"].includes(receipt.status)).length;
 
-  return <AppShell view={view} queueCount={queueCount} onNavigate={navigate}>
+  return <AppShell view={view} queueCount={queueCount} historyOnly={historyOnly} onNavigate={navigate}>
     {view === "home" ? <UploadScreen receipts={receipts} health={health} busy={busy} onUpload={upload} onOpen={openReceipt} onQueue={() => navigate("queue")} /> : null}
     {view === "quality" && activeReceipt ? <QualityScreen receipt={activeReceipt} busy={busy} analysisEnabled={health?.analysisEnabled ?? false} onBack={() => navigate("home")} onAnalyze={analyze} onRetake={discardCapture} /> : null}
     {view === "confirm" && activeReceipt ? <ReceiptEditor key={activeReceipt.id} receipt={activeReceipt} busy={busy} automationJob={automationJob?.receiptId === activeReceipt.id ? automationJob : null} onBack={() => navigate("queue")} onSave={save} onGenerate={generate} onApprove={approve} onDelete={remove} /> : null}
