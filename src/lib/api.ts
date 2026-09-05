@@ -41,4 +41,11 @@ export const api = {
   createEmployee: (body: { name: string; role: string }) => request<{ employee: Employee }>("/api/employees", json("POST", body)),
 };
 
-export const imageUrl = (receiptId: string, imageId: string) => `/api/receipts/${receiptId}/images/${imageId}`;
+type ImageResolver = (receiptId: string, imageId: string) => string;
+
+let resolveImage: ImageResolver = (receiptId, imageId) => `/api/receipts/${receiptId}/images/${imageId}`;
+
+/** Preview-only seam. The hosted interface preview is the sole caller. */
+export const setImageResolver = (resolver: ImageResolver) => { resolveImage = resolver; };
+
+export const imageUrl: ImageResolver = (receiptId, imageId) => resolveImage(receiptId, imageId);

@@ -4,8 +4,8 @@
 .
 ├── src/                  React/Vite client
 │   ├── components/       Reusable workflow and shell components
-│   ├── lib/              Browser API and shared display helpers
-│   └── styles/           Design tokens and responsive application CSS
+│   ├── lib/              Browser API, display helpers, preview-only demo backend
+│   └── styles/           Liquid Glass tokens, material, and responsive layout
 ├── server/               Local API
 │   ├── ai/               AI contract, Claude, disabled, and test-only providers
 │   ├── domain/           Schemas, normalization, grounding, state rules
