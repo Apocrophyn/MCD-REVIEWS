@@ -1,7 +1,8 @@
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, CircleUserRound, LoaderCircle, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronRight, CircleUserRound, FileText, LoaderCircle, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, imageUrl } from "../lib/api";
 import type { AutomationJob, Employee, Experience, Receipt, ReceiptItem } from "../types";
+import { IconWell } from "./IconWell";
 
 const attributes = [
   ["food_quality", "Food quality"], ["service", "Service"], ["cleanliness", "Cleanliness"],
@@ -81,6 +82,7 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
     <header className="focus-header"><button className="icon-button" onClick={onBack} aria-label="Back"><ArrowLeft /></button><h1>Confirm receipt</h1><span className={`overall-confidence ${confidenceClass(receipt.confidence)}`}>{Math.round(receipt.confidence * 100)}%</span></header>
     <div className="editor-grid">
       <section className="receipt-column">
+        <div className="editor-section-heading"><IconWell><FileText /></IconWell><h2>Your receipt</h2></div>
         <img className="editor-receipt-image" src={imageUrl(receipt.id, receipt.images[0].id)} alt="Receipt being confirmed" />
         <div className="quality-compact">{[["Readable", "readable"], ["Full receipt", "fullReceipt"], ["No glare", "noGlare"]].map(([label, key]) => {
           const passed = receipt.images.every((image) => image.quality[key as keyof typeof image.quality]);
@@ -89,6 +91,7 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
       </section>
 
       <section className="details-column">
+        <div className="editor-section-heading"><h2>Receipt details</h2></div>
         <div className="form-section">
           <div className="field-row"><label htmlFor="store">Store</label><input id="store" value={store} onChange={(event) => setStore(event.target.value)} /></div>
           <div className="field-row"><label htmlFor="date">Date</label><input id="date" type="datetime-local" value={visitedAt} onChange={(event) => setVisitedAt(event.target.value)} /></div>
@@ -108,17 +111,17 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
         <button className="text-button" onClick={addItem}><Plus /> Add item</button>
 
         <div className="subsection-heading employee-heading"><h2>Add employee <small>(optional)</small></h2></div>
-        <div className="employee-search"><Search /><input value={employeeQuery} onChange={(event) => setEmployeeQuery(event.target.value)} placeholder="Search by name" /><button onClick={() => setAddingEmployee(true)}>Add</button></div>
+        <div className="employee-search"><Search /><input aria-label="Search employees by name" value={employeeQuery} onChange={(event) => setEmployeeQuery(event.target.value)} placeholder="Search by name" /><button onClick={() => setAddingEmployee(true)}>Add</button></div>
         {employees.length || addingEmployee ? <div className="employee-results">
           {employees.map((employee) => <button className={experience.employeeId === employee.id ? "selected" : ""} key={employee.id} onClick={() => setExperience((current) => ({ ...current, employeeId: current.employeeId === employee.id ? null : employee.id }))}><CircleUserRound /><span><strong>{employee.name}</strong><small>{employee.role || "Team member"}</small></span>{experience.employeeId === employee.id ? <Check /> : <ChevronRight />}</button>)}
-          {addingEmployee ? <div className="new-employee"><input value={newRole} onChange={(event) => setNewRole(event.target.value)} placeholder="Role (optional)" /><button onClick={createEmployee}>Save {employeeQuery || "employee"}</button></div> : null}
+          {addingEmployee ? <div className="new-employee"><input aria-label="Employee role" value={newRole} onChange={(event) => setNewRole(event.target.value)} placeholder="Role (optional)" /><button onClick={createEmployee}>Save {employeeQuery || "employee"}</button></div> : null}
         </div> : null}
       </section>
 
       <section className="experience-column">
-        <div className="subsection-heading"><h2>How was your visit?</h2></div>
+        <div className="editor-section-heading"><h2>How was your visit?</h2></div>
         <label className="field-label">Attributes <small>Select all that apply</small></label>
-        <div className="attribute-grid">{attributes.map(([value, label]) => <button key={value} className={experience.attributes.includes(value) ? "selected" : ""} onClick={() => toggleAttribute(value)}>{experience.attributes.includes(value) ? <Check /> : null}{label}</button>)}</div>
+        <div className="attribute-grid">{attributes.map(([value, label]) => <button key={value} aria-pressed={experience.attributes.includes(value)} className={experience.attributes.includes(value) ? "selected" : ""} onClick={() => toggleAttribute(value)}>{experience.attributes.includes(value) ? <Check /> : null}{label}</button>)}</div>
         <label className="field-label satisfaction-label">Overall satisfaction</label>
         <div className="satisfaction" role="radiogroup" aria-label="Overall satisfaction">{satisfactionLabels.map((label, index) => <button role="radio" aria-checked={experience.satisfaction === index + 1} className={experience.satisfaction === index + 1 ? "selected" : ""} key={label} onClick={() => setExperience((current) => ({ ...current, satisfaction: index + 1 }))}><span>{index + 1}</span><small>{label}</small></button>)}</div>
         <div className="survey-details">
@@ -141,15 +144,16 @@ export function ReceiptEditor({ receipt, busy, automationJob, onBack, onSave, on
       </section>
 
       <aside className="actions-column">
+        <div className="editor-section-heading"><IconWell><ShieldCheck /></IconWell><h2>Review & approve</h2></div>
         {jobComplete
           ? <div className="completed-action"><CheckCircle2 /> Survey completed</div>
           : <button className="primary-button" disabled={busy || !canApprove} onClick={() => onApprove(receiptUpdate(), experience, feedback)}><ShieldCheck /> {busy ? "Starting survey…" : automationJob ? "Approve & run again" : "Approve & run survey"}</button>}
         <button className="secondary-button" disabled={busy} onClick={() => onSave({ ...receiptUpdate(), experience, feedback })}>Save draft</button>
         <p className="approval-note"><ShieldCheck /><span><strong>No survey tab required</strong><small>A private background browser fills and submits the official survey using only the answers confirmed here.</small></span></p>
         {automationJob ? <div className={`automation-panel automation-${automationJob.status}`} role="status">
-          <span className="automation-icon">{automationJob.status === "completed" ? <CheckCircle2 /> : ["failed", "needs_attention"].includes(automationJob.status) ? <AlertTriangle /> : <LoaderCircle className="spin" />}</span>
+          <IconWell className="automation-icon">{automationJob.status === "completed" ? <CheckCircle2 /> : ["failed", "needs_attention"].includes(automationJob.status) ? <AlertTriangle /> : <LoaderCircle className="spin" />}</IconWell>
           <div><h3>{automationTitle(automationJob)}</h3><p>{automationJob.message}</p></div>
-          <div className="automation-progress" role="progressbar" aria-label="Survey completion progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={automationJob.progress}><span style={{ width: `${automationJob.progress}%` }} /></div>
+          <div className="automation-progress" role="progressbar" aria-label="Survey completion progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={automationJob.progress}><span style={{ transform: `scaleX(${automationJob.progress / 100})` }} /></div>
           {automationJob.status === "needs_attention" ? <small>Update any missing answer above, confirm the terms, and run it again. Receipt Relay will not guess.</small> : null}
         </div> : <div className="automation-ready"><Sparkles /><span><strong>Ready for one-click completion</strong><small>Approve once. Progress and the final result appear here while you stay in Receipt Relay.</small></span></div>}
         <button className="danger-link" disabled={busy} onClick={onDelete}><Trash2 /> Delete receipt and images</button>
