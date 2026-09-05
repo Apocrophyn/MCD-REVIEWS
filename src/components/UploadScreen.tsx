@@ -21,12 +21,14 @@ export function UploadScreen({ receipts, health, busy, onUpload, onOpen, onQueue
       <header className="mobile-brand"><span className="brand-mark"><span /></span><strong>Receipt Relay</strong><ShieldCheck /></header>
       <section className="intro">
         <h1>Turn a receipt into useful feedback.</h1>
+        <p>Photograph a receipt, confirm what it actually says, and a private background browser finishes the official survey for you.</p>
       </section>
 
       <section className="capture-panel" aria-label="Upload a receipt">
         <button className="camera-target" disabled={busy} onClick={() => cameraRef.current?.click()} data-testid="take-photo">
           <span className="camera-orbit"><Camera /></span>
           <strong>{busy ? "Checking image…" : "Take a photo"}</strong>
+          <small>{busy ? "Running local quality checks" : "Fill the frame in even light"}</small>
         </button>
         <input ref={cameraRef} hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => choose(event.target.files)} />
         <button className="secondary-button gallery-button" disabled={busy} onClick={() => galleryRef.current?.click()}><Image /> Choose from gallery</button>

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "build:preview": "VITE_PREVIEW_DEMO=1 npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
